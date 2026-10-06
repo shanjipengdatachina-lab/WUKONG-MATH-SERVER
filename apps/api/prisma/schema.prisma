@@ -209,6 +209,11 @@ model User {
   posts            Post[]
   replies          Reply[]
   subscriptions    Subscription[]
+
+  /// 停用时间。null = 正常。用时间戳而不是布尔标志：顺带记下"什么时候停的"，
+  /// 判定就是 `disabledAt !== null`，不会出现"标志位说停用、时间说没停"这种两处对不上的状态。
+  disabledAt DateTime?
+
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 

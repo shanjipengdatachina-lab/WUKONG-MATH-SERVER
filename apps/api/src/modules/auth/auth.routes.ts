@@ -114,6 +114,12 @@ authRouter.post('/auth/login', async (req, res) => {
     res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: '账号或密码不对' } });
     return;
   }
+  /* 停用判定放在**密码验过之后**：先验密码，别人就不能拿"这个账号是不是被停用"
+     当账号探测器。措辞也必须跟"密码不对"分开 —— 否则本人会一直以为自己记错了密码。 */
+  if (user.disabledAt) {
+    res.status(403).json({ error: { code: 'ACCOUNT_DISABLED', message: '这个账号已被停用，请联系老师' } });
+    return;
+  }
   const sid = await createSession(user.id);
   res.cookie(config.auth.cookieName, signToken(user.id, sid), cookieOptions());
   res.json(toOut(user));

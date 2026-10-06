@@ -87,6 +87,13 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     return;
   }
 
+  /* 停用的账号**立刻**失效：不用等会话过期，也不用等定时任务扫 ——
+     判定就是当下这一眼的 disabledAt。 */
+  if (user.disabledAt) {
+    res.status(403).json({ error: { code: 'ACCOUNT_DISABLED', message: '这个账号已被停用，请联系老师' } });
+    return;
+  }
+
   req.user = {
     id: user.id,
     username: user.username,
