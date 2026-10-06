@@ -40,12 +40,18 @@ const PlansOut = z.object({
   version: z.string().describe('内容哈希，客户端可用它做协商缓存'),
 });
 
+const PerkOut = z.object({
+  value: z.string().nullable().describe('这一项要显示的字；空着前台就显示 ✓'),
+  quota: z.number().nullable().describe('数量上限；null = 不限（或这一项不是额度型）'),
+});
+
 const EntitlementOut = z.object({
   plan: PlanOut.nullable().describe('当前生效的套餐；没买过就是免费版'),
   endAt: z.string().nullable().describe('到期时间；免费版为 null'),
   isMember: z.boolean().describe('**判定在服务端** —— 前台藏个按钮不算权限'),
   daysLeft: z.number().nullable(),
-  perks: z.record(z.string(), z.string().nullable()).describe('服务 code → 显示值（null 表示只是"有"）'),
+  perks: z.record(z.string(), PerkOut)
+    .describe('服务 code → 这一项的样子。**只列包含的**，键不在里面就是没这一项'),
 });
 
 registry.registerPath({
@@ -150,21 +156,31 @@ plansRouter.get('/plans', async (_req, res) => {
   res.json({ ...payload, version });
 });
 
+/** 一项服务的样子：给人看的字 + 给服务端算的数。 */
+export type Perk = { value: string | null; quota: number | null };
+
+/**
+ * 某个套餐**实际包含**哪些服务。
+ * 判定与显示都从这里出发，全项目只此一处 ——
+ * 否则"套餐页上写的"和"接口放行的"迟早会不一样，而且没人会发现（两边都不报错）。
+ */
+export async function loadPerks(planCode: string): Promise<Record<string, Perk>> {
+  const links = await prisma.planService.findMany({
+    where: { plan: { code: planCode }, included: true, service: { active: true } },
+    include: { service: true },
+  });
+  const out: Record<string, Perk> = {};
+  links.forEach((l) => { out[l.service.code] = { value: l.value, quota: l.quota }; });
+  return out;
+}
+
 plansRouter.get('/me/entitlement', requireAuth, async (req, res) => {
   const me = req.user!;
   const ent = await currentEntitlement(me.id);
 
-  /* 把"有哪几项"摊平成一张表给前端，省得它自己再跟套餐表对一遍 */
-  const perks: Record<string, string | null> = {};
-  if (ent.plan) {
-    const links = await prisma.planService.findMany({
-      where: { plan: { code: ent.plan.code } },
-      include: { service: true },
-    });
-    links.forEach((l) => {
-      if (l.included && l.service.active) { perks[l.service.code] = l.value; }
-    });
-  }
+  /* 把"有哪几项、各有多少额度"摊平成一张表给前端：
+     省得它自己再跟套餐表对一遍，也省得它自己算"他算不算会员" */
+  const perks = ent.plan ? await loadPerks(ent.plan.code) : {};
 
   res.json({
     plan: ent.plan,

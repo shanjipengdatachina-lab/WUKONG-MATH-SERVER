@@ -32,7 +32,8 @@ export const DEFAULT_SERVICES: {
   code: string;
   name: string;
   desc: string;
-  valueBy: Record<string, { included: boolean; value?: string }>;
+  /** quota 是**给服务端算的**上限；value 是给人看的字。两件事分开（见 schema 里那段注释）。 */
+  valueBy: Record<string, { included: boolean; value?: string; quota?: number }>;
 }[] = [
   {
     code: 'knowledge_tree', name: '知识结构与正文', desc: '章节 / 图谱 / 时间轴的全部内容',
@@ -65,8 +66,12 @@ export const DEFAULT_SERVICES: {
   {
     code: 'mistake_capacity', name: '错题本容量', desc: '自动归档的错题条数上限',
     valueBy: {
-      free: { included: true, value: '50 道' }, 'half-year': { included: true, value: '不限' },
-      'one-year': { included: true, value: '不限' }, 'three-year': { included: true, value: '不限' },
+      /* quota 才是**真正执行**的那个数；value 是同一件事的说法。
+         免费版写 50，服务端就按 50 截；付费版 quota 空着 = 不限 */
+      free: { included: true, value: '50 道', quota: 50 },
+      'half-year': { included: true, value: '不限' },
+      'one-year': { included: true, value: '不限' },
+      'three-year': { included: true, value: '不限' },
     },
   },
   {
@@ -136,7 +141,12 @@ export async function seedPlans(prisma: PrismaClient): Promise<PlanCounts> {
         throw new Error(`服务项目 ${svc.code} 里提到了套餐 ${planCode}，但 DEFAULT_PLANS 里没有它`);
       }
       await prisma.planService.create({
-        data: { planId, serviceId: created.id, included: cell.included, value: cell.value ?? null },
+        data: {
+          planId, serviceId: created.id,
+          included: cell.included,
+          value: cell.value ?? null,
+          quota: cell.quota ?? null,
+        },
       });
       links += 1;
     }

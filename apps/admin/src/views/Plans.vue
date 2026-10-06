@@ -114,8 +114,10 @@
       <div class="pl__head">
         <h2>权益对照</h2>
         <span class="pl__note">
-          开关 = 这个套餐含不含这一项；右边那格填**显示什么字**（「50 道」「不限」「进阶」），
-          留空就显示 ✓。改一格存一格。
+          开关 = 这个套餐含不含这一项；中间那格填「显示什么字」（「50 道」「不限」「进阶」），
+          留空就显示 ✓。最后那个「上限」只有额度型项目才出现 —— 它填的数字
+          <strong>服务端真的会照着执行</strong>（比如错题本容量），
+          所以"显示的说法"和"执行的数"是分开管的。改一格存一格。
         </span>
       </div>
 
@@ -148,6 +150,19 @@
                     class="pl__cell-input"
                     :disabled="!canWrite || !cellOf(p.id, s.id).included"
                     @update:model-value="(v) => setValue(p.id, s.id, String(v))"
+                    @blur="saveCell(p.id, s.id)"
+                    @keyup.enter="saveCell(p.id, s.id)"
+                  />
+                  <!-- 上限只给"服务端真会按它执行"的项配输入框。
+                       给每一项都摆一个，就会出现"填了数字、什么也没发生" —— 那是最糟的控件。 -->
+                  <el-input
+                    v-if="QUOTA_CODES.includes(s.code)"
+                    :model-value="cellOf(p.id, s.id).quota === null ? '' : String(cellOf(p.id, s.id).quota)"
+                    size="small"
+                    placeholder="上限，留空=不限"
+                    class="pl__cell-input pl__cell-quota"
+                    :disabled="!canWrite || !cellOf(p.id, s.id).included"
+                    @update:model-value="(v) => setQuota(p.id, s.id, String(v))"
                     @blur="saveCell(p.id, s.id)"
                     @keyup.enter="saveCell(p.id, s.id)"
                   />
@@ -190,7 +205,15 @@ type PlanRow = {
 type ServiceRow = {
   id: number; code: string; name: string; desc: string | null; order: number; active: boolean;
 };
-type Cell = { planId: number; serviceId: number; included: boolean; value: string | null };
+type Cell = { planId: number; serviceId: number; included: boolean; value: string | null; quota: number | null };
+
+/**
+ * 服务端**会按"上限"执行**的服务项目。
+ * 目前只有错题本容量（后台配 50，服务端就按 50 截断，见 apps/api/src/middleware/perk.ts）。
+ * 加新的额度型项目时**这里和后端要一起动** —— 所以摆在一眼看得见的地方，
+ * 别让它俩悄悄失配（失配的样子是：后台填了数字，实际什么也没发生）。
+ */
+const QUOTA_CODES = ['mistake_capacity'];
 
 const plans = ref<PlanRow[]>([]);
 const services = ref<ServiceRow[]>([]);
@@ -209,7 +232,7 @@ function key(planId: number, serviceId: number): string { return planId + ':' + 
 /** 取一格。表里缺这一格（新加的行/列还没来得及补）时返回一个临时的"不含"。 */
 function cellOf(planId: number, serviceId: number): Cell {
   const k = key(planId, serviceId);
-  if (!cells[k]) { cells[k] = { planId, serviceId, included: false, value: null }; }
+  if (!cells[k]) { cells[k] = { planId, serviceId, included: false, value: null, quota: null }; }
   return cells[k];
 }
 
@@ -346,13 +369,23 @@ function setValue(planId: number, serviceId: number, v: string): void {
   cellOf(planId, serviceId).value = v === '' ? null : v;
 }
 
+/** 上限：留空 = 不限（null）。填的不是非负整数就当没填 —— 但**不能**把 null 当成 0 写下去。 */
+function setQuota(planId: number, serviceId: number, v: string): void {
+  const t = v.trim();
+  if (t === '') { cellOf(planId, serviceId).quota = null; return; }
+  const n = Number(t);
+  cellOf(planId, serviceId).quota = Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 async function saveCell(planId: number, serviceId: number): Promise<void> {
   const cell = cellOf(planId, serviceId);
   error.value = '';
   try {
     await api('/admin/plan-services', {
       method: 'PUT',
-      body: JSON.stringify({ planId, serviceId, included: cell.included, value: cell.value }),
+      body: JSON.stringify({
+        planId, serviceId, included: cell.included, value: cell.value, quota: cell.quota,
+      }),
     });
     ok('这一格已保存');
   } catch (e) { fail(e); }
@@ -397,6 +430,10 @@ onMounted(load);
 .pl__off { margin-left: 6px; font-size: 11px; color: var(--admin-ink-3); }
 .pl__cell { display: flex; align-items: center; gap: 8px; }
 .pl__cell-input { width: 120px; }
+/* 上限那一栏只有额度型项目才有。做得比文案栏窄一点、字色淡一点，
+   一眼看得出"这一栏是可选的、而且它管的是数字不是说法" */
+.pl__cell-quota { width: 140px; }
+.pl__cell-quota :deep(.el-input__inner) { color: var(--admin-ink-2); }
 
 .pl__hint { margin: 10px 0 0; font-size: 12px; line-height: 1.8; color: var(--admin-ink-3); }
 </style>

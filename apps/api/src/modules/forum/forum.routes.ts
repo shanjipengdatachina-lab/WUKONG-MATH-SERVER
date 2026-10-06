@@ -117,6 +117,43 @@ forumRouter.get('/forum/boards', async (_req, res) => {
   });
 });
 
+/**
+ * 哪些作者现在享有"答疑优先"。
+ *
+ * 一次查完，**不要一帖一查** —— 那是 N×2 次查询，而这个问题只要一次。
+ * 取"当前那一份订阅"的规则和 currentEntitlement 完全一样
+ * （orderBy endAt desc, id desc，第一条就是它）：两处判定必须同一套，
+ * 否则套餐页写"你有"、这里说"你没有"，谁也说不清哪个对。
+ */
+async function priorityAuthors(userIds: number[]): Promise<Set<number>> {
+  const uniq = [...new Set(userIds)];
+  if (!uniq.length) { return new Set(); }
+
+  const now = new Date();
+  const subs = await prisma.subscription.findMany({
+    where: { userId: { in: uniq }, status: 'active', OR: [{ endAt: null }, { endAt: { gt: now } }] },
+    orderBy: [{ endAt: 'desc' }, { id: 'desc' }],
+    include: {
+      plan: {
+        include: {
+          services: { where: { included: true }, include: { service: true } },
+        },
+      },
+    },
+  });
+
+  /* 每人只留第一条（排序已经保证它就是"当前那一份"） */
+  const picked = new Map<number, (typeof subs)[number]>();
+  subs.forEach((s) => { if (!picked.has(s.userId)) { picked.set(s.userId, s); } });
+
+  const out = new Set<number>();
+  picked.forEach((s, uid) => {
+    const has = s.plan.services.some((l) => l.service.active && l.service.code === 'priority_support');
+    if (has) { out.add(uid); }
+  });
+  return out;
+}
+
 forumRouter.get('/forum/posts', async (req, res) => {
   const board = typeof req.query.board === 'string' ? req.query.board : '';
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -131,7 +168,26 @@ forumRouter.get('/forum/posts', async (req, res) => {
     include: { board: { select: { code: true, name: true } }, _count: { select: { replies: true } } },
   });
 
-  res.json({ total: rows.length, items: rows.map((p) => brief(p, meId)) });
+  /* "答疑优先"（后台能配）在这里落地：享这一项的人提问排在前面。
+     注意它的语义是**排前面，不是藏掉别人的** —— 所以只调顺序，一条都不少。
+     排序是稳定的，所以同一档里仍然保持"新的在前"。
+
+     发帖人字段是 `authorId` 而且**可以是 null**（早年的匿名帖），
+     所以先滤掉 null 再交给判定 —— 不然一个 null 会在 Set 里变成一个永远不命中的键。 */
+  const priority = await priorityAuthors(
+    rows.map((p) => p.authorId).filter((x): x is number => x !== null),
+  );
+  const hasPriority = (p: { authorId: number | null }): boolean =>
+    p.authorId !== null && priority.has(p.authorId);
+
+  const ordered = [...rows].sort(
+    (a, b) => (hasPriority(a) ? 0 : 1) - (hasPriority(b) ? 0 : 1),
+  );
+
+  res.json({
+    total: ordered.length,
+    items: ordered.map((p) => ({ ...brief(p, meId), priority: hasPriority(p) })),
+  });
 });
 
 forumRouter.get('/forum/posts/:id', async (req, res) => {

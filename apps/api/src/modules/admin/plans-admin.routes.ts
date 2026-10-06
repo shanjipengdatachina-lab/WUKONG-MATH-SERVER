@@ -52,6 +52,9 @@ const CellIn = z.object({
   serviceId: z.number().int().positive(),
   included: z.boolean(),
   value: z.string().max(64).nullable().optional(),
+  /* 额度型那一项的上限（错题本 "50 道" 这种）。**null = 不限**。
+     传 undefined 表示"这次不改这一栏"，所以下面写入时要判断一下。 */
+  quota: z.number().int().min(0).max(1000000).nullable().optional(),
 });
 
 registry.registerPath({
@@ -119,6 +122,7 @@ async function fullConfig() {
     /* 矩阵：`${planId}:${serviceId}` → 那一格 */
     cells: links.map((l) => ({
       planId: l.planId, serviceId: l.serviceId, included: l.included, value: l.value,
+      quota: l.quota,
     })),
   };
 }
@@ -263,7 +267,7 @@ plansAdminRouter.put('/admin/plan-services', requireAuth, requirePerm('plan.writ
     res.status(400).json({ error: { code: 'BAD_INPUT', message: parsed.error.issues[0]?.message ?? '入参不对' } });
     return;
   }
-  const { planId, serviceId, included, value } = parsed.data;
+  const { planId, serviceId, included, value, quota } = parsed.data;
   const [plan, service] = await Promise.all([
     prisma.plan.findUnique({ where: { id: planId }, select: { id: true } }),
     prisma.serviceItem.findUnique({ where: { id: serviceId }, select: { id: true } }),
@@ -273,10 +277,16 @@ plansAdminRouter.put('/admin/plan-services', requireAuth, requirePerm('plan.writ
     return;
   }
 
+  /* quota 没传就**不动它**：后台那一格改文案时不该顺手把上限抹掉。
+     要清成"不限"就显式传 null —— "没传"和"传了 null"是两件事。 */
   const cell = await prisma.planService.upsert({
     where: { planId_serviceId: { planId, serviceId } },
-    create: { planId, serviceId, included, value: value ?? null },
-    update: { included, value: value ?? null },
+    create: { planId, serviceId, included, value: value ?? null, quota: quota ?? null },
+    update: {
+      included,
+      value: value ?? null,
+      ...(quota === undefined ? {} : { quota }),
+    },
   });
   res.json({ cell });
 });

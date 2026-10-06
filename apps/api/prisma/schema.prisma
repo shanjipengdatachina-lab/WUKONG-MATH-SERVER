@@ -719,6 +719,12 @@ model PlanService {
   included  Boolean @default(true)
   /// 这一格要显示的文字（"50 道" / "不限" / "进阶"）。空着就显示 ✓
   value     String? @db.VarChar(64)
+  /// **这一项的数量上限**（错题本 "50 道" 这种）。null = 不限，或这一项不是额度型。
+  ///
+  /// 为什么不从 value 里把 "50 道" 抠出来当数字用：那等于**改文案就是改行为**。
+  /// 运营把"50 道"写成"五十道"，判定就悄悄失效了，而且没人会想到是文案改坏的。
+  /// 所以：数字归 quota，文案归 value，两件事各管各的。
+  quota     Int?
 
   @@id([planId, serviceId])
   @@map("plan_service")

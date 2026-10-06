@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { registry } from '../../openapi.js';
 import { prisma } from '../../db.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { requirePerk, canUse, quotaOf } from '../../middleware/perk.js';
 
 const QuestionOut = z.object({
   id: z.number(), kind: z.string(), code: z.string(), tag: z.string().nullable(),
@@ -100,7 +101,9 @@ function judge(kind: string, answer: string | null, given: string): boolean {
   return a.toUpperCase() === answer.trim().toUpperCase();
 }
 
-practiceRouter.get('/practice/questions', requireAuth, async (_req, res) => {
+/* 题库是"一项服务"：后台把 question_bank 从某个套餐上取消，这里立刻 403。
+   判定在服务端 —— 前端把那一页藏起来不算权限（设计稿 §3.6）。 */
+practiceRouter.get('/practice/questions', requireAuth, requirePerk('question_bank'), async (_req, res) => {
   const rows = await prisma.question.findMany({
     where: { kind: { in: ['choice', 'blank'] } },
     orderBy: { order: 'asc' },
@@ -114,7 +117,7 @@ practiceRouter.get('/practice/questions', requireAuth, async (_req, res) => {
   });
 });
 
-practiceRouter.post('/practice/sessions', requireAuth, async (req, res) => {
+practiceRouter.post('/practice/sessions', requireAuth, requirePerk('question_bank'), async (req, res) => {
   const parsed = SessionIn.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: { code: 'BAD_INPUT', message: 'count 要是 1~20 的整数' } });
@@ -153,7 +156,7 @@ practiceRouter.post('/practice/sessions', requireAuth, async (req, res) => {
   });
 });
 
-practiceRouter.post('/practice/sessions/:id/submit', requireAuth, async (req, res) => {
+practiceRouter.post('/practice/sessions/:id/submit', requireAuth, requirePerk('question_bank'), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: { code: 'BAD_INPUT', message: '会话 id 不对' } });
@@ -179,6 +182,10 @@ practiceRouter.post('/practice/sessions/:id/submit', requireAuth, async (req, re
     return;
   }
 
+  /* 题解是**另一项**服务：判分和正确答案是免费的，分步思路是会员的。
+     不给权益就把 explanation 抹成 null —— 不是"前端藏起来"，是根本不发出去。 */
+  const withSolution = await canUse(req.user!.id, 'member_solution');
+
   const givenOf = new Map(parsed.data.answers.map((a) => [a.questionId, a.given]));
 
   const details: {
@@ -201,7 +208,7 @@ practiceRouter.post('/practice/sessions/:id/submit', requireAuth, async (req, re
       given,
       answer: a.question.answer ?? '',
       correct,
-      explanation: a.question.explanation,
+      explanation: withSolution ? a.question.explanation : null,
       kind: a.question.kind,
     });
   }
@@ -214,26 +221,48 @@ practiceRouter.post('/practice/sessions/:id/submit', requireAuth, async (req, re
 
   /* 错的自动进错题本。
      `source: 'practice'` 与考试错题分开 —— 练习错题没有卷面、没有轴上的格子，
-     那几列留空即可（见 schema 里 Mistake 的注释）。 */
+     那几列留空即可（见 schema 里 Mistake 的注释）。
+
+     **错题本有容量**（免费版 50 道，后台能配）。到顶就不再归档。
+     这里的取舍：满了就静默丢几条最像 bug，所以把丢了几道**数出来回给前台**，
+     让它明说"有 3 道没归档进去，因为错题本满了" —— 学生不会莫名其妙少几条。 */
   const wrongOnes = details.filter((d) => !d.correct);
+  /* 三层含义分清楚：undefined = 这个套餐压根没有错题本这一项（归档 0 条）；
+     null = 不限；数字 = 上限就是它 */
+  const cap = await quotaOf(req.user!.id, 'mistake_capacity');
+  const unlimited = cap === null;
+  /* 只有 cap 是个数时才当上限；undefined（没这一项）按 0 算 —— 见上面那三层含义 */
+  const limit = typeof cap === 'number' ? cap : 0;
+
+  let archived = 0;
+  let dropped = 0;
+
   if (wrongOnes.length) {
-    await prisma.mistake.createMany({
-      data: wrongOnes.map((d) => ({
-        userId: req.user!.id,
-        source: 'practice',
-        nodeId: null,
-        examCode: null,
-        cellIndex: null,
-        cardNo: null,
-        causes: null,
-        questionId: d.questionId,
-        given: d.given,
-        score: 0,
-        full: 1,
-        at: BigInt(Date.now()),
-        status: 'open',
-      })),
-    });
+    const used = await prisma.mistake.count({ where: { userId: req.user!.id } });
+    const room = unlimited ? wrongOnes.length : Math.max(0, limit - used);
+    const take = wrongOnes.slice(0, room);
+    archived = take.length;
+    dropped = wrongOnes.length - take.length;
+
+    if (take.length) {
+      await prisma.mistake.createMany({
+        data: take.map((d) => ({
+          userId: req.user!.id,
+          source: 'practice',
+          nodeId: null,
+          examCode: null,
+          cellIndex: null,
+          cardNo: null,
+          causes: null,
+          questionId: d.questionId,
+          given: d.given,
+          score: 0,
+          full: 1,
+          at: BigInt(Date.now()),
+          status: 'open',
+        })),
+      });
+    }
   }
 
   res.json({
@@ -241,6 +270,12 @@ practiceRouter.post('/practice/sessions/:id/submit', requireAuth, async (req, re
     total: session.answers.length,
     correct: correctCount,
     score: session.answers.length ? Math.round((correctCount / session.answers.length) * 100) : 0,
+    /* 错题归档的结果如实说：进去几道、因为容量满了丢了几道 */
+    archived,
+    dropped,
+    /* 题解这次给没给 —— 前台据此显示"会员专属"的引导，
+       而不是空一片让人以为页面坏了 */
+    hasSolution: withSolution,
     details: details.map(({ kind: _k, ...rest }) => rest),
   });
 });

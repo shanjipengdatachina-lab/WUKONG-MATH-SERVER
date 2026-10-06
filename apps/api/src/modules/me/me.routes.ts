@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { registry } from '../../openapi.js';
 import { prisma } from '../../db.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { quotaOf } from '../../middleware/perk.js';
 import { computeAxis, type AxisResult } from '../tree/axis.service.js';
 
 /* ---------------- 出参形状 ---------------- */
@@ -497,8 +498,15 @@ meRouter.get('/me/mistakes', requireAuth, async (req, res) => {
 
   const rows = await prisma.mistake.findMany({ where: { userId: me.id }, orderBy: { at: 'desc' } });
 
+  /* 容量一并回给前台：错题本那页要写"已用 37 / 上限 50"，
+     到顶时还要能说清"再攒需要开通会员"。用的是和归档**同一个** quotaOf ——
+     显示和实际执行各算各的，迟早会不一样 */
+  const cap = await quotaOf(me.id, 'mistake_capacity');
+
   res.json({
     total: rows.length,
+    /* null = 不限；数字 = 上限（0 表示这个套餐压根没有错题本这一项） */
+    quota: cap === undefined ? 0 : cap,
     items: rows.map((m) => ({
       id: m.id,
       source: m.source,
