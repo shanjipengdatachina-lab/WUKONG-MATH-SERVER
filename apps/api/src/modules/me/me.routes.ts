@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { registry } from '../../openapi.js';
 import { prisma } from '../../db.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { computeAxis, type AxisResult } from '../tree/axis.service.js';
 
 /* ---------------- 出参形状 ---------------- */
 
@@ -31,7 +32,8 @@ const CardOut = z.object({
 });
 
 const RecordOut = z.object({
-  axisIndex: z.number(), nodeId: z.number(),
+  /* 位置不在这里：数组下标就是轴上的位置（现算的，见 tree/axis.service.ts） */
+  nodeId: z.number(),
   mastery: z.number(), status: z.string(),
   learnedAt: z.string(), reviewAt: z.string(), plannedAt: z.string(),
   diff: z.number(), term: z.string(),
@@ -156,7 +158,7 @@ function num(v: bigint): number { return Number(v); }
 /* ---------------- 一个学生的整份学习数据 ---------------- */
 
 type RawRecord = {
-  id: number; axisIndex: number; nodeId: number; mastery: number; status: string;
+  id: number; nodeId: number; mastery: number; status: string;
   learnedAt: string | null; reviewAt: string | null; plannedAt: string | null;
   diff: number | null; term: string | null; factors: string | null; cards: string | null;
   blocked: boolean;
@@ -171,7 +173,7 @@ type RawRecord = {
 type RawExam = {
   code: string; name: string; at: bigint; date: string; fromIdx: number; toIdx: number; scope: string;
   papers: {
-    index: number; full: number; score: number; card: number;
+    index: number; nodeId: number | null; full: number; score: number; card: number;
     also: string | null; causes: string | null;
   }[];
 };
@@ -183,7 +185,6 @@ function json<T>(raw: string | null, fallback: T): T {
 
 function toRecord(r: RawRecord) {
   return {
-    axisIndex: r.axisIndex,
     nodeId: r.nodeId,
     mastery: r.mastery,
     status: r.status,
@@ -208,29 +209,61 @@ function toRecord(r: RawRecord) {
   };
 }
 
-function toExam(e: RawExam) {
+function toExam(e: RawExam, axis: AxisResult) {
+  /* 卷面题的"第几格"**不存死数**：题上记的是 nodeId，这里映射到当前的轴。
+     后台把某章挪个位置，卷面的位置跟着走，不会指到隔壁题上。
+     节点被删掉的那种题（nodeId 已不在轴上）就丢掉 —— 它已经没有地方可画了。 */
+  const paper = e.papers
+    .map((p) => {
+      const at = p.nodeId === null ? undefined : axis.at.get(p.nodeId);
+      return at === undefined ? null : {
+        index: at, full: p.full, score: p.score, card: p.card,
+        also: json<number[]>(p.also, []),
+        causes: json<Record<string, unknown>[]>(p.causes, []),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => a.index - b.index);
+
+  const indices = paper.map((x) => x.index);
   return {
     id: e.code,
     name: e.name,
     at: num(e.at),
     date: e.date,
-    from: e.fromIdx,
-    to: e.toIdx,
+    /* 覆盖范围也现算：这一场考的是轴上哪一段，以它卷面上实际还有的题为准 */
+    from: indices.length ? Math.min(...indices) : 0,
+    to: indices.length ? Math.max(...indices) + 1 : 0,
     scope: e.scope,
-    paper: e.papers.map((p) => ({
-      index: p.index, full: p.full, score: p.score, card: p.card,
-      also: json<number[]>(p.also, []),
-      causes: json<Record<string, unknown>[]>(p.causes, []),
-    })),
+    paper,
+  };
+}
+
+/** 没学过的那一格长什么样 —— 与前端本机生成那份的"未开始"形状一致 */
+function blankRecord(nodeId: number) {
+  return {
+    nodeId,
+    mastery: 0,
+    status: '未开始',
+    learnedAt: '',
+    reviewAt: '',
+    plannedAt: '',
+    diff: 1,
+    term: '',
+    factors: null,
+    cards: [],
+    marks: [] as string[],
+    blocked: false,
+    events: [] as ReturnType<typeof toRecord>['events'],
   };
 }
 
 async function loadLearning(userId: number, viewer: string, mine: boolean) {
-  const [profile, records, exams] = await Promise.all([
+  const [profile, axis, records, exams] = await Promise.all([
     prisma.learningProfile.findUnique({ where: { userId } }),
+    computeAxis(),
     prisma.learningRecord.findMany({
       where: { userId },
-      orderBy: { axisIndex: 'asc' },
       include: { marks: { select: { mark: true } }, events: { orderBy: { at: 'asc' } } },
     }) as unknown as Promise<RawRecord[]>,
     prisma.exam.findMany({
@@ -240,12 +273,28 @@ async function loadLearning(userId: number, viewer: string, mine: boolean) {
     }) as unknown as Promise<RawExam[]>,
   ]);
 
+  /* **按当前轴顺序摆成一条稠密数组**：第 i 个元素就是轴上第 i 格。
+     视图是按下标索引它的（考试卷面的 index 也是下标），所以这里必须一位不差。
+     学生没学过、或者新加了节点还没记录的格子，补一个"未开始"占位 ——
+     不补的话数组会短一截，后面每一格都会错位，而且错得很隐蔽。 */
+  const dense: ReturnType<typeof toRecord>[] = axis.order.map((nodeId) => blankRecord(nodeId));
+  let placed = 0;
+  for (const r of records) {
+    const at = axis.at.get(r.nodeId);
+    if (at === undefined) { continue; }   /* 这一格已经不在轴上了（节点被删/移出轴） */
+    dense[at] = toRecord(r);
+    placed += 1;
+  }
+
   const payload = {
     viewer,
     mine,
     today: profile?.todayAt ?? '2026-06-30',
-    records: records.map(toRecord),
-    exams: exams.map(toExam),
+    records: dense,
+    exams: exams.map((e) => toExam(e, axis)),
+    /* 对数用：轴上有几格、其中几格有记录。前端不看这两个字段。 */
+    axisItems: axis.order.length,
+    recordsPlaced: placed,
   };
   const version = createHash('sha1').update(JSON.stringify(payload)).digest('hex').slice(0, 12);
   return { version, ...payload };
@@ -286,7 +335,7 @@ meRouter.get('/me/profile', requireAuth, async (req, res) => {
   const [records, counts, profile, recentEvents] = await Promise.all([
     prisma.learningRecord.findMany({
       where: { userId: me.id },
-      select: { axisIndex: true, nodeId: true, mastery: true, status: true, cards: true, blocked: true },
+      select: { nodeId: true, mastery: true, status: true, cards: true, blocked: true },
     }),
     Promise.all([
       prisma.learningEvent.count({ where: { record: { userId: me.id } } }),
@@ -440,6 +489,7 @@ meRouter.get('/me/profile', requireAuth, async (req, res) => {
 meRouter.get('/me/mistakes', requireAuth, async (req, res) => {
   const me = req.user!;
   const idx = await nodeIndex();
+  const axis = await computeAxis();
   const examNames = new Map(
     (await prisma.exam.findMany({ where: { userId: me.id }, select: { code: true, name: true } }))
       .map((e) => [e.code, e.name]),
@@ -456,9 +506,11 @@ meRouter.get('/me/mistakes', requireAuth, async (req, res) => {
       examName: m.examCode === null ? '' : (examNames.get(m.examCode) ?? m.examCode),
       date: new Date(num(m.at)).toISOString().slice(0, 10),
       nodeId: m.nodeId,
-      nodeName: m.nodeId === null ? '' : (idx.nameOf.get(m.nodeId) ?? ''),
+      /* 名字优先取**快照**：知识点被删掉之后，错题本上照样要显示当时考的是哪个点 */
+      nodeName: m.nodeName || (m.nodeId === null ? '' : (idx.nameOf.get(m.nodeId) ?? '')),
       path: m.nodeId === null ? [] : pathOf(m.nodeId, idx),
-      cellIndex: m.cellIndex,
+      /* 轴上第几格现算 —— 树改过之后这个数会变，卷面位置也跟着走 */
+      cellIndex: m.nodeId === null ? m.cellIndex : (axis.at.get(m.nodeId) ?? m.cellIndex),
       score: m.score,
       full: m.full,
       cardNo: m.cardNo,

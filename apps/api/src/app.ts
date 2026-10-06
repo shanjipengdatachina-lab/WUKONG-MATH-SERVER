@@ -15,6 +15,7 @@ import { contentRouter } from './modules/content/content.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { meRouter } from './modules/me/me.routes.js';
+import { treeAdminRouter } from './modules/admin/tree-admin.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
 import { forumRouter } from './modules/forum/forum.routes.js';
 
@@ -33,6 +34,7 @@ export function createApp() {
   app.use('/api', treeRouter);
   app.use('/api', contentRouter);
   app.use('/api', authRouter);
+  app.use('/api', treeAdminRouter);
   app.use('/api', adminRouter);
   app.use('/api', meRouter);
   app.use('/api', practiceRouter);

@@ -53,7 +53,8 @@ contentRouter.get('/nodes/:id/content', async (req, res) => {
     return;
   }
 
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  /* 同 /api/tree：正文改完要立刻看得见（后台写完，学生端刷新就是新版） */
+  res.setHeader('Cache-Control', 'no-cache');
   res.json({
     nodeId: row.nodeId,
     version: row.version,

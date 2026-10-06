@@ -130,6 +130,8 @@ export async function seedLearning(
   prisma: PrismaClient,
   axisNodeIds: number[],
   plans: LearningPlan[],
+  /** 节点 id → 名字。错题要存一份名字快照：节点删了，错题本还读得出来。 */
+  nodeNames: Map<number, string> = new Map(),
 ): Promise<LearningCounts> {
   const out: LearningCounts = {
     records: 0, withTrajectory: 0, events: 0, exams: 0, papers: 0, mistakes: 0, marks: 0, favorites: 0, notes: 0,
@@ -146,7 +148,6 @@ export async function seedLearning(
       return {
         userId: plan.userId,
         nodeId,
-        axisIndex: i,
         mastery: rec.mastery,
         status: rec.status,
         learnedAt: rec.learnedAt || null,
@@ -255,7 +256,8 @@ export async function seedLearning(
         };
       });
 
-      await prisma.examPaper.createMany({ data: paperRows.map(({ nodeId: _n, ...rest }) => rest) });
+      /* nodeId 一起存：后台改树之后，卷面题要能映射回"现在"的第几格 */
+      await prisma.examPaper.createMany({ data: paperRows });
       out.papers += paperRows.length;
 
       /* 错题：卷面不到 60%。挂到那一格对应的节点上。 */
@@ -266,6 +268,8 @@ export async function seedLearning(
             userId: plan.userId,
             source: 'exam',
             nodeId: p.nodeId,
+            /* 快照：删了节点之后错题本上还能显示当时考的是哪个知识点 */
+            nodeName: nodeNames.get(p.nodeId) ?? '',
             examCode: ex.id,
             cellIndex: p.index,
             cardNo: p.card,

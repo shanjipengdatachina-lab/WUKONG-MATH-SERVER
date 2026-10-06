@@ -23,7 +23,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(API_BASE + path, { ...init, headers, credentials: 'include' });
+    /* 后台是**改数据**的地方：任何一层缓存都可能让"改完界面不变"。
+       带 no-store 让浏览器每次都问服务端 —— 实测不过这一关的话，
+       /api/tree 的 max-age=300 会让改完的节点在界面上五分钟不出现。 */
+    res = await fetch(API_BASE + path, { ...init, headers, credentials: 'include', cache: 'no-store' });
   } catch (e) {
     throw { status: 0, code: 'NETWORK', message: '连不上接口服务，确认它起了没有' } as ApiError;
   }

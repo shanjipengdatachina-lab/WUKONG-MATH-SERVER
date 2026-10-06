@@ -19,6 +19,7 @@ import {
 } from './learning.js';
 import { clearPractice, readPracticeSeed, seedPractice, type PracticeCounts } from './practice.js';
 import { clearForum, readForumSeed, seedForum, type ForumCounts } from './forum.js';
+import { buildAxisFrom } from '../modules/tree/axis.service.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SEED = process.env.SEED_DIR
@@ -130,45 +131,13 @@ async function main(): Promise<void> {
     await prisma.node.createMany({ data: nodes.slice(i, i + CHUNK) });
   }
 
-  /* ---- 4) 复刻轴的走法，拿到"第 i 格对应哪个节点" ---- */
-  const axisNodeIds: number[] = [];
-
-  function walk(node: TreeNode, chain: ChainSeg[]): void {
-    const id = idByNode.get(node) as number;
-    const kind = node.kind;
-    let next = chain;
-
-    if (kind === 'book') {
-      const grade = gradeOf(node.name);
-      next = chain.concat([{ depth: 0, stage: node.stage, name: STAGE_CN[node.stage ?? ''] ?? '数学' }]);
-      if (grade) next = next.concat([{ depth: 1, stage: node.stage, name: grade }]);
-      next = next.concat([{ depth: 2, stage: node.stage, name: node.name }]);
-    } else if (kind === 'track') {
-      next = chain.concat([
-        { depth: 0, stage: 'olympiad', name: STAGE_CN.olympiad as string },
-        { depth: 2, stage: 'olympiad', name: node.name },
-      ]);
-    } else if (kind === 'chapter') {
-      next = chain.concat([{ depth: 3, name: node.name }]);
-    } else if (kind === 'section') {
-      next = chain.concat([{ depth: 4, name: node.name }]);
-    }
-    /* point 不入 chain；group / method / error / exam 不上轴 */
-
-    const kids = node.children ?? [];
-    const finer = kids.filter((k) => k.kind === 'section' || k.kind === 'point');
-
-    if (kind === 'point') {
-      axisNodeIds.push(id);
-    } else if (kind === 'section') {
-      if (!kids.some((k) => k.kind === 'point')) axisNodeIds.push(id);
-    } else if (kind === 'chapter') {
-      if (finer.length === 0) axisNodeIds.push(id);
-    }
-
-    kids.forEach((k) => walk(k, next));
-  }
-  walk(tree, []);
+  /* ---- 4) 轴：谁上轴、按什么顺序 ----
+     规则**只留在 modules/tree/axis.service.ts 一处**（原来这里自己复刻了一份 DFS，
+     加上前端那份就是两处 —— 改一处忘一处，症状是"卡片挂到隔壁格上，数量还对得上"）。 */
+  const axis = buildAxisFrom(nodes.map((n) => ({
+    id: n.id, kind: n.kind, name: n.name, parentId: n.parentId, order: n.order,
+  })));
+  const axisNodeIds = axis.order;
 
   /* ---- 5) 卡片：轴第 i 格上的卡片 → 那一格的节点 ---- */
   const cardRows: { nodeId: number; no: number; typeName: string; weight: number }[] = [];
@@ -267,7 +236,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const learnCounts: LearningCounts = await seedLearning(prisma, axisNodeIds, plans);
+  const nodeNames = new Map(nodes.map((n) => [n.id, n.name]));
+  const learnCounts: LearningCounts = await seedLearning(prisma, axisNodeIds, plans, nodeNames);
   const demoUser = userIdOf.get('student');
   const extra = demoUser === undefined
     ? { favorites: 0, notes: 0 }
@@ -300,7 +270,12 @@ async function main(): Promise<void> {
   const actual: Record<string, number> = {
     treeNodes: await prisma.node.count(),
     axisItems: axisNodeIds.length,
-    book: 0, chapter: 0, section: 0, point: 0,
+    /* 册 / 章 / 节 / 知识点 的总数取**轴统计**：它跟轴走的是同一遍遍历，
+       轴规则要是被改坏了，这几行会立刻报红。 */
+    book: axis.total.book,
+    chapter: axis.total.chapter,
+    section: axis.total.section,
+    point: axis.total.point,
   };
   kindCounts.forEach((k) => { actual[k.kind] = k._count._all; });
 

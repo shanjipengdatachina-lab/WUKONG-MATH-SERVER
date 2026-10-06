@@ -79,7 +79,6 @@ model Node {
 
   /* M3：学习数据也会指向节点（一格记录 / 错题 / 笔记 / 标记） */
   learningRecords LearningRecord[]
-  mistakes        Mistake[]
   notes           Note[]
   pointMarks      PointMark[]
 
@@ -265,12 +264,6 @@ model LearningRecord {
   nodeId    Int
   node      Node    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  /// 这一格在**轴上第几格**（0 起，共 769 格）。
-  /// 为什么单存一列：视图是**按轴下标**索引记录的（考试卷面的 paper.index 也是轴下标），
-  /// 客户端拿到数组时要能一眼放回原位；靠 service 每次现推一遍轴顺序，
-  /// 就等于把 timeline-axis.js 那套走法在第三个地方再实现一次 —— 迟早漂。
-  axisIndex Int     @default(0)
-
   /// 0~100
   mastery   Int     @default(0)
   /// 未开始 / 学习中 / 初步掌握 / 已掌握 / 精通 / 待复习
@@ -307,7 +300,6 @@ model LearningRecord {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, nodeId])
-  @@index([userId, axisIndex])
   @@index([userId, status])
   @@map("learning_record")
 }
@@ -369,8 +361,12 @@ model ExamPaper {
   examId Int
   exam   Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
 
-  /// 卷面上的题号
+  /// 这场考试覆盖轴上第几格到第几格（0 起）
   index  Int
+  /// 这道题考的是**哪个节点**。存 id 而不是只存"第几格"：
+  /// 后台改一次树，格子的下标就会平移，只记数字的话卷面就指到隔壁题上了。
+  /// **普通列，不是外键** —— 卷面是历史记录，节点删了它也该留着。
+  nodeId Int?
   full   Int
   score  Int
   card   Int
@@ -400,9 +396,11 @@ model Mistake {
   /// 不判别就只能给练习错题编一个假考号，错题本上就会冒出根本不存在的考试。
   source     String @default("exam") @db.VarChar(16)
 
-  /// 挂在哪个知识点上（练习错题可能压根挂不上 —— 题目没绑节点）
+  /// 挂在哪个知识点上（练习错题可能压根挂不上 —— 题目没绑节点）。
+  /// **普通列，不是外键**：删一个知识点不该把学生的错题记录一起删掉（那是数据丢失），
+  /// 所以这里存 id + 一份名字快照，节点没了名字还在，错题本照样读得出来。
   nodeId     Int?
-  node       Node?  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  nodeName   String @default("") @db.VarChar(191)
 
   examCode   String? @db.VarChar(16)
   /// 这一格在**轴上第几格**（不是"卷面上第几题" —— 冻数据里的字段名就叫 index，

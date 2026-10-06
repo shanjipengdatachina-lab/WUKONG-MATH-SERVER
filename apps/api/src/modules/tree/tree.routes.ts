@@ -54,7 +54,10 @@ treeRouter.get('/tree', async (req, res) => {
   const etag = `"${version}"`;
 
   res.setHeader('ETag', etag);
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  /* 不许"存 5 分钟再问"：后台一改树就要立刻看得见（改完学生端刷新也是新的）。
+     用 no-cache 而不是 no-store —— 缓存可以留，但每次都得拿 ETag 回来问一句；
+     内容没变照样回 304，所以带宽并没有多花。 */
+  res.setHeader('Cache-Control', 'no-cache');
 
   /* 版本对得上就回 304。两条路都认：
        · `If-None-Match` —— HTTP 标准做法，给工具 / CDN / 浏览器自己的 HTTP 缓存用；
