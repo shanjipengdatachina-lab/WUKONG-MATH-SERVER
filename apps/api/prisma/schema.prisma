@@ -81,6 +81,8 @@ model Node {
   learningRecords LearningRecord[]
   notes           Note[]
   pointMarks      PointMark[]
+  /* H：考试切片说"这次考到哪几章" */
+  examSliceNodes  ExamSliceNode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -210,6 +212,7 @@ model User {
   replies          Reply[]
   subscriptions    Subscription[]
   orders           Order[]
+  examSlices       ExamSlice[]
 
   /// 停用时间。null = 正常。用时间戳而不是布尔标志：顺带记下"什么时候停的"，
   /// 判定就是 `disabledAt !== null`，不会出现"标志位说停用、时间说没停"这种两处对不上的状态。
@@ -797,6 +800,115 @@ model Order {
 
   @@index([userId, status])
   @@map("order")
+}
+
+// ==========================================================================
+// H · 考试切片（学生自己上传的考试）
+// ==========================================================================
+//
+// 与 `Exam`（演示数据里导入的那 15 场）**是两回事**，互不干扰、也不合并：
+//   Exam  —— 历史数据，带卷面题、轴上区间、错题；没人能改它
+//   切片  —— 学生自己传的：图片 + 自己框的错题 + 一句"这次的情况"
+// 为什么不复用 Exam：Exam 的字段是"从标注数据里推出来的"（覆盖轴区间、卷面题号、
+// 每个知识点得分），而学生上传时只知道"哪一天、什么卷、考了多少、错在哪几题"。
+// 硬塞进一张表，两边都会多出一堆永远为空的列，而且演示数据会被学生改动。
+//
+// 上传的图片落在 STORAGE_DIR（见 config.ts），库里只存**相对路径**。
+
+/// 一张考试的切片：一次上传 = 一条。
+model ExamSlice {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 考试名称，例如"五年级上 · 第一单元综合素养评价"
+  name      String @db.VarChar(191)
+  /// 考试那天。**存 `YYYY-MM-DD` 字符串**（和 LearningRecord 同一套）：
+  /// 这是"日历上的哪一天"，没有时刻也没有时区，转成 DateTime 反而会引入偏差。
+  date      String @db.VarChar(16)
+  /// 科目与卷型，例如"数学" + "单元卷 / 期中 / 期末 / 模拟"
+  subject   String @db.VarChar(64)
+  paperType String @db.VarChar(32)
+
+  /// 得分与满分。**都允许为空**：有时候学生只想知道错在哪，不想填分数；
+  /// 而得分率这类统计只在两个都有值时才出现在报告里（不猜、不用 0 顶替）。
+  score Int?
+  full  Int?
+
+  /// 学生写的那段"这次的情况"
+  note String? @db.Text
+
+  images ExamSliceImage[]
+  boxes  ExamSliceBox[]
+  /// 这次考到了哪几章（学生选）—— 3D 时间轴上就按这个区间落位
+  nodes  ExamSliceNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+  @@map("exam_slice")
+}
+
+/// 切片里的一张图（正面 / 反面 / 附加页）。
+model ExamSliceImage {
+  id      Int       @id @default(autoincrement())
+  sliceId Int
+  slice   ExamSlice @relation(fields: [sliceId], references: [id], onDelete: Cascade)
+
+  /// 相对 uploads 根目录的路径。**服务端生成，不接受前端传路径** ——
+  /// 让前端给路径等于让人往任意位置写文件。
+  file  String @db.VarChar(191)
+  label String @db.VarChar(32)
+  /// 第几页（0 起）。框上的 `page` 指的就是它。
+  order Int    @default(0)
+  /// 原始字节数：后台据此判断"这张要不要压缩"
+  bytes Int    @default(0)
+
+  @@index([sliceId])
+  @@map("exam_slice_image")
+}
+
+/// 卷面上一个框 = 一道题。
+/// 坐标是**百分比**（相对那张图）—— 与像素尺寸无关，换图、压缩、裁边都不用重算
+/// （和演示阶段那份 `exam-scan.js` 同一套口径）。
+model ExamSliceBox {
+  id      Int       @id @default(autoincrement())
+  sliceId Int
+  slice   ExamSlice @relation(fields: [sliceId], references: [id], onDelete: Cascade)
+
+  /// 第几页（对应 ExamSliceImage.order）
+  page Int
+  /// 卷面上的题号
+  q    Int
+  x    Float
+  y    Float
+  w    Float
+  h    Float
+
+  /// 这道题考的是哪个知识点。**报告里的"薄弱点"全靠它** ——
+  /// 不填也能存（框还在），只是那道题不进知识点统计。
+  nodeId Int?
+  /// 错因（学生自己写的一句）
+  cause String? @db.VarChar(191)
+
+  @@index([sliceId])
+  @@map("exam_slice_box")
+}
+
+/// 这次考到了哪几章。多对多 —— 一场考试常常覆盖好几章。
+///
+/// 用**真外键 + 级联**（不是普通列）：章被删掉之后，"这次考到了哪一章"就是一句空话，
+/// 留着那个 id 只会让时间轴去查一个不存在的节点。和 Mistake 那边（要保住历史名字快照）
+/// 不一样 —— 这里没有名字可保，覆盖关系本来就依赖那一章还在。
+model ExamSliceNode {
+  sliceId Int
+  nodeId  Int
+  slice   ExamSlice @relation(fields: [sliceId], references: [id], onDelete: Cascade)
+  node    Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@id([sliceId, nodeId])
+  @@map("exam_slice_node")
 }
 
 /// 渠道那边确认收到钱的那条记录。

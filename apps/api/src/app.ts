@@ -21,6 +21,9 @@ import { plansRouter } from './modules/plans/plans.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
 import { forumRouter } from './modules/forum/forum.routes.js';
 import { ordersRouter } from './modules/pay/orders.routes.js';
+import { uploadsRouter } from './modules/uploads/uploads.routes.js';
+import { slicesRouter } from './modules/slices/slices.routes.js';
+import { uploadsRoot } from './modules/uploads/storage.service.js';
 import { requestId, accessLog } from './middleware/request-log.js';
 
 export function createApp() {
@@ -54,6 +57,15 @@ export function createApp() {
   app.use('/api', practiceRouter);
   app.use('/api', forumRouter);
   app.use('/api', ordersRouter);
+  app.use('/api', uploadsRouter);
+  app.use('/api', slicesRouter);
+
+  /* 学生上传的卷子照片。开发期由接口自己发；生产是 Nginx 直接发那个卷（见 deploy/nginx.conf）。
+     文件名是服务端随机生成的、不含任何用户输入，所以可以放心长缓存。 */
+  app.use('/uploads', express.static(uploadsRoot, {
+    index: false, dotfiles: 'deny', maxAge: '30d', immutable: true,
+  }));
+
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(buildOpenApiDocument()));
 
   /* 兜底 404：统一响应形状，别让前端收到一坨 HTML */
