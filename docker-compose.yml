@@ -1,0 +1,97 @@
+# ==========================================================================
+# 生产 · 一个域名，三条路
+# ==========================================================================
+# ⚠️ 这份 **没有在本机跑过** —— 这台开发机上没有 Docker。
+#    上线前请按上线手册里的「自检」逐条走一遍（compose config / nginx -t / 三个 curl）。
+#
+# 拓扑：
+#     浏览器 ──▶ web(nginx)
+#                  ├── /         → 学生端静态（直接挂 WKMATH 那份，**零构建**）
+#                  ├── /admin/   → 后台构建产物
+#                  └── /api/     → api:3000
+#                                    └── db(mysql:8)
+#
+# 为什么非要**同域**：登录态是 httpOnly Cookie。跨域就得 SameSite=None + CORS 白名单，
+# 而第三方 Cookie 正在被各家浏览器逐步掐掉 —— 同域把这个问题从根上去掉。
+#
+# 启动（注意带上 env-file，compose 的变量替换和容器内的环境变量用的是**同一个文件**）：
+#     docker compose --env-file deploy/.env.production up -d
+# ==========================================================================
+
+name: wukong-math
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?缺 MYSQL_ROOT_PASSWORD（见 deploy/.env.production.example）}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-wukong_math}
+      MYSQL_USER: ${MYSQL_USER:-wukong}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?缺 MYSQL_PASSWORD（见 deploy/.env.production.example）}
+    command:
+      # 字符集必须显式给：这个库里全是中文正文，默认字符集在排序和 emoji 上会出怪事。
+      # 注意 utf8mb4_0900_ai_ci 是 MySQL 8 的默认排序规则，中文按 **codepoint** 排 ——
+      # 想要按拼音排得换 utf8mb4_zh_0900_as_cs，但那是"查得到"之外的另一件事，先不掺进来。
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: [deploy/.env.production]
+    environment:
+      # 压掉 env 文件里那一条：容器里连的是 compose 的服务名 db，不是 localhost
+      DATABASE_URL: mysql://${MYSQL_USER:-wukong}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-wukong_math}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose: ["3000"]
+    volumes:
+      # 上传的文件要落在一个卷上：不落卷的话，容器一重建，附件就全没了
+      # （对应 deploy/.env.production 里的 STORAGE_DIR）
+      - api_uploads:/app/apps/api/var/uploads
+    logging:
+      driver: json-file
+      # 不设这个，日志能把磁盘塞满 —— 而日志本身不该成为一个故障原因
+      options: { max-size: "20m", max-file: "5" }
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # 443 只有在拿到证书、启用 deploy/optional/https.conf 之后才有用；
+      # 先开着不碍事（没有那个 server 块就没人监听 443）
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # 学生端：**直接挂那份静态文件**，不构建 —— 用户口径里点名要保住这条
+      - ../WKMATH:/srv/web:ro
+      # 后台：在宿主机上 `npm run build -w @wukong-math/admin` 出来的产物
+      - ./apps/admin/dist:/srv/admin:ro
+      # 证书与 certbot 的校验目录
+      - ./deploy/certs:/etc/nginx/certs:ro
+      - ./deploy/acme:/var/www/certbot
+      # 有没有 HTTPS，取决于这个目录里有没有文件（见上线手册）
+      - ./deploy/optional:/etc/nginx/conf.d/optional:ro
+    depends_on: [api]
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  db_data:
+  api_uploads:

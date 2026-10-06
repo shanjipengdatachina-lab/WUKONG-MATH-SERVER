@@ -1,0 +1,27 @@
+# 构建镜像时不进上下文的那些东西
+# 少了这份，`docker build` 会把本机的 node_modules 和本地数据库一起打包上传（几百 MB，还慢）
+
+node_modules
+**/node_modules
+
+# 构建产物：镜像里自己会构建
+dist
+**/dist
+*.tsbuildinfo
+
+# 本地开发库与生成出来的 schema —— 生产用的是 MySQL 那份
+*.db
+*.db-journal
+apps/api/prisma/dev
+
+# 真值环境变量绝不进镜像
+.env
+.env.*
+!*.example
+
+# 杂项
+.git
+.gitignore
+*.log
+.DS_Store
+docs

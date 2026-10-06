@@ -21,11 +21,15 @@ import { plansRouter } from './modules/plans/plans.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
 import { forumRouter } from './modules/forum/forum.routes.js';
 import { ordersRouter } from './modules/pay/orders.routes.js';
+import { requestId, accessLog } from './middleware/request-log.js';
 
 export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  /* 观测：先给每个请求一个单号，再挂访问日志 —— 这样日志里带得上那个号 */
+  app.use(requestId);
+  app.use(accessLog);
   /* 支付回调**必须拿到原始报文**：签名是对着原始 body 算的，
      解析成对象再拼回去，键的顺序一变就永远验不过 —— 而这种错只在真通道上才暴露。
      这一条要放在 json 之前，用 raw 把整个 body 原样收下
@@ -58,11 +62,30 @@ export function createApp() {
   });
 
   /* 兜底错误：统一形状 + 生产环境不把堆栈吐给前端 */
-  const onError: ErrorRequestHandler = (err, _req, res, _next) => {
+  const onError: ErrorRequestHandler = (err, req, res, _next) => {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[api] 未捕获的错误：', err);
-    res.status(500).json({
-      error: { code: 'INTERNAL', message: process.env.NODE_ENV === 'production' ? '服务内部错误' : message },
+    /* 4xx 是"这一次请求本身不对"（例如 body 超了 1mb 的限制），不能一律记成 500 ——
+       500 是要叫人半夜爬起来查的，4xx 不该有那个待遇；日志在这件事上不能撒谎。 */
+    const boxed = err as { status?: number; statusCode?: number };
+    const raw = Number(boxed.status ?? boxed.statusCode);
+    const bad = Number.isInteger(raw) && raw >= 400 && raw < 500;
+    const status = bad ? raw : 500;
+
+    if (bad) {
+      console.warn(`[api] 请求被拒 rid=${req.requestId ?? '-'} ${status}：${message}`);
+    } else {
+      /* 日志里带单号：一串报错里要能认出"哪一次是用户报的那个" */
+      console.error(`[api] 未捕获的错误 rid=${req.requestId ?? '-'}：`, err);
+    }
+
+    res.status(status).json({
+      error: {
+        code: bad ? 'BAD_REQUEST' : 'INTERNAL',
+        /* 生产环境不把内部细节吐出去；4xx 的原话本来就是说给调用方听的，照实回 */
+        message: !bad && process.env.NODE_ENV === 'production' ? '服务内部错误' : message,
+        /* 把单号也回给前端：用户照抄一下就够了，不用再去猜是哪一次请求 */
+        requestId: req.requestId ?? null,
+      },
     });
   };
   app.use(onError);

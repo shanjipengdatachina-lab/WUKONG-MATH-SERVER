@@ -1,0 +1,88 @@
+# ==========================================================================
+# HTTPS（方式 B：自己在服务器上签证书）
+# ==========================================================================
+# 用法：复制成 deploy/optional/https.conf，把 <域名> 换成真域名，
+#       拿到证书之后 `docker compose restart web`。
+#       （compose 已经把 deploy/optional/ 挂到 /etc/nginx/conf.d/optional/，
+#         而 deploy/nginx.conf 末尾 include 了它 —— 所以放进去就生效。）
+#
+# 为什么不在 nginx.conf 里直接写 443：证书还不存在时 nginx 会因为读不到证书
+# **整个起不来**，连"签证书要用的 80 校验"都做不了 —— 先有鸡还是先有蛋。
+#
+# 下面那两个 location 块和 deploy/nginx.conf 里是**同一套**，只多了一个 443 的监听。
+# 改了一边记得改另一边。
+# ==========================================================================
+
+# 80 只做两件事：让 certbot 校验域名、把其他请求顶回 https。
+# server_name 写**真域名**（不是 _），这样它比 nginx.conf 里那个 `server_name _` 更具体，
+# nginx 会按域名优先匹配到这一份。
+server {
+    listen 80;
+    server_name <域名>;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # 少了这一条，用户用 http 进来会登不上（生产 Cookie 带 Secure），
+    # 而且浏览器不会告诉你为什么 —— 就是一直"登录成功后又变回未登录"
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name <域名>;
+
+    ssl_certificate     /etc/nginx/certs/live/<域名>/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/live/<域名>/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    client_max_body_size 4m;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # ---- 接口 ----
+    # ⚠️ `proxy_pass` **不带路径**：接口服务自己的路径里就带 /api（app.use('/api', ...)），
+    #    写成 proxy_pass http://wukong_api/; 会把前缀吃掉，结果是每个接口都 404。
+    location /api/ {
+        proxy_pass http://wukong_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $request_id;
+        proxy_set_header Connection "";
+        proxy_read_timeout 60s;
+    }
+
+    # ---- 管理后台 ----
+    location = /admin { return 301 /admin/; }
+
+    location /admin/assets/ {
+        alias /srv/admin/assets/;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location /admin/ {
+        alias /srv/admin/;
+        try_files $uri $uri/ /admin/index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    # ---- 学生端 ----
+    location / {
+        root /srv/web;
+        index index.html;
+        # 文件名不带哈希，所以不能长缓存（设了的话一个修复要等一周才到用户手上）
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ =404;
+    }
+}

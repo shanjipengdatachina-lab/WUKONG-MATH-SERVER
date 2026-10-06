@@ -10,7 +10,7 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [vue()],
   server: {
     port: 5174,
@@ -18,5 +18,10 @@ export default defineConfig({
       '/api': { target: 'http://localhost:3000', changeOrigin: false },
     },
   },
+  /* 生产挂在 /admin/ 下面（Nginx 同域反代），开发仍在根路径。
+     不设这个 base 的话，构建出来的 index.html 会去要 /assets/xxx.js ——
+     而那个路径在生产上属于学生端，后台直接白屏，报的还是个看不出原因的 404。
+     开发那边不跟着改，是因为 dev server 会跑到 localhost:5174/admin/ 去，跟现在的习惯不一样。 */
+  base: command === 'build' ? '/admin/' : '/',
   build: { outDir: 'dist', sourcemap: false },
-});
+}));
