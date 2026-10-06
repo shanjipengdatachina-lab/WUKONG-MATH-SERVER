@@ -28,6 +28,10 @@
           <el-icon><User /></el-icon>
           <span>用户</span>
         </el-menu-item>
+        <el-menu-item v-if="can('order.read')" index="/orders">
+          <el-icon><Tickets /></el-icon>
+          <span>订单</span>
+        </el-menu-item>
       </el-menu>
 
       <div class="lay__foot">
@@ -62,7 +66,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Odometer, Share, User, Money } from '@element-plus/icons-vue';
+import { Odometer, Share, User, Money, Tickets } from '@element-plus/icons-vue';
 import { api, auth, can, API_BASE } from '../api';
 
 const route = useRoute();

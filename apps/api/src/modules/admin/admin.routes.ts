@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { registry } from '../../openapi.js';
 import { prisma } from '../../db.js';
 import { requireAuth, requirePerm } from '../../middleware/auth.js';
+import { channelOf } from '../pay/channels.js';
+import { statusOf } from '../pay/pay.service.js';
 
 const Stats = z.object({
   nodes: z.record(z.string(), z.number()).describe('按 kind 分组的节点数'),
@@ -65,6 +67,42 @@ registry.registerPath({
     403: { description: '没权限', content: { 'application/json': { schema: ErrOut } } },
     404: { description: '没有这个用户', content: { 'application/json': { schema: ErrOut } } },
     409: { description: '不能改自己（这条同时保证了永远剩得下一个管理员）', content: { 'application/json': { schema: ErrOut } } },
+  },
+});
+
+const OrderAdminRow = z.object({
+  orderNo: z.string(),
+  username: z.string().describe('下单的人'),
+  nickname: z.string(),
+  planName: z.string(),
+  amountCents: z.number(),
+  status: z.string(),
+  channel: z.string(),
+  channelName: z.string(),
+  isTest: z.boolean().describe('走测试通道的单 —— **不许算进"真实收款"**'),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  paidAt: z.string().nullable(),
+});
+
+const OrderAdminList = z.object({
+  total: z.number(),
+  items: z.array(OrderAdminRow),
+  summary: z.object({
+    paidCount: z.number(),
+    paidCents: z.number().describe('全部已支付（含测试通道）'),
+    realPaidCount: z.number(),
+    realPaidCents: z.number().describe('**不含测试通道** —— 对账看这个'),
+    pendingCount: z.number(),
+    expiredCount: z.number(),
+  }),
+});
+
+registry.registerPath({
+  method: 'get', path: '/api/admin/orders', summary: '订单列表与收款概览（需 order.read）',
+  responses: {
+    200: { description: '订单', content: { 'application/json': { schema: OrderAdminList } } },
+    403: { description: '没权限', content: { 'application/json': { schema: ErrOut } } },
   },
 });
 
@@ -154,4 +192,56 @@ adminRouter.patch('/admin/users/:id', requireAuth, requirePerm('user.write'), as
   }
 
   res.json(toRow(updated));
+});
+
+/* ---- 订单 ---- */
+/* 收了钱，后台得看得见 —— 这是 `order.read` 这个权限点存在的理由。
+   现在只出最近 200 笔：再多就该分页了（加游标），而不是把整张表拉给浏览器。 */
+adminRouter.get('/admin/orders', requireAuth, requirePerm('order.read'), async (req, res) => {
+  const want = typeof req.query.status === 'string' ? req.query.status : '';
+
+  const rows = await prisma.order.findMany({
+    orderBy: { id: 'desc' },
+    take: 200,
+    include: { user: { select: { username: true, nickname: true } } },
+  });
+
+  const items = rows.map((o) => {
+    const ch = channelOf(o.channel);
+    return {
+      orderNo: o.orderNo,
+      username: o.user ? o.user.username : '(已删除)',
+      nickname: o.user ? o.user.nickname : '',
+      planName: o.planName,
+      amountCents: o.amountCents,
+      /* 状态**读的时候现算**（超时的算 expired）—— 和前台同一套，不靠定时任务 */
+      status: statusOf(o),
+      channel: o.channel,
+      channelName: ch ? ch.name : o.channel,
+      isTest: !!ch?.isTest,
+      createdAt: o.createdAt.toISOString(),
+      expiresAt: o.expiresAt.toISOString(),
+      paidAt: o.paidAt ? o.paidAt.toISOString() : null,
+    };
+  });
+
+  /* 概览里**必须把测试通道的单单独拎出来**。
+     把它们混进"收款"那一栏，对账的人会当成真钱 —— 而这正是最不该发生的事。
+     所以两个数都给：`paidCents` 是全部的，`realPaidCents` 才是能拿去对账的。 */
+  const paid = items.filter((i) => i.status === 'paid');
+  const realPaid = paid.filter((i) => !i.isTest);
+  const sum = (list: typeof items): number => list.reduce((s, i) => s + i.amountCents, 0);
+
+  res.json({
+    total: items.filter((i) => !want || i.status === want).length,
+    items: want ? items.filter((i) => i.status === want) : items,
+    summary: {
+      paidCount: paid.length,
+      paidCents: sum(paid),
+      realPaidCount: realPaid.length,
+      realPaidCents: sum(realPaid),
+      pendingCount: items.filter((i) => i.status === 'pending').length,
+      expiredCount: items.filter((i) => i.status === 'expired').length,
+    },
+  });
 });
