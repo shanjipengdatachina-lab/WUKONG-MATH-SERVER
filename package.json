@@ -1,0 +1,17 @@
+{
+  "name": "wukong-math-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "悟空数学 · 后台（接口服务 + PC 管理后台）",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "api:dev": "npm run dev -w @wukong-math/api",
+    "api:typecheck": "npm run typecheck -w @wukong-math/api",
+    "db:dev": "npm run db:dev -w @wukong-math/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

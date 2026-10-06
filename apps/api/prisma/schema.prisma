@@ -1,0 +1,644 @@
+/* ==========================================================================
+   悟空数学 · 数据模型
+   --------------------------------------------------------------------------
+   这份是给**生产 MySQL 8** 用的，是唯一源头。
+   本地开发跑的是**从这份自动生成的 SQLite 版**（见 tools/dev-schema.mjs）。
+   规矩：**只改这一份**。生成出来的 prisma/dev/schema.prisma 别手改，下次会被覆盖。
+
+   为什么 kind 用 String 而不是 enum：**SQLite 不支持 enum**（Prisma 明确不支持），
+   用了 enum 就会让"一份 schema 同时喂 MySQL 和 SQLite"这条断掉。所以取值约束放在
+   zod（接口边界）而不是数据库 —— 这也正是 §7.1「入参走 zod」那条规矩要管的事。
+   ========================================================================== */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================================================
+// M0 · 探活
+// ==========================================================================
+
+/// /api/health 会查它。
+model HealthCheck {
+  id        Int      @id @default(autoincrement())
+  note      String   @db.VarChar(191)
+  checkedAt DateTime @default(now())
+
+  @@map("health_check")
+}
+
+// ==========================================================================
+// M1 · 知识结构
+// ==========================================================================
+
+/// 知识树的一个节点。
+///
+/// **一棵自引用树，不做 Stage / Book / Chapter / Section / Point 五张固定表。**
+/// 理由是真实数据不是一条直线（见 seed/math-tree.json）：
+///   · 竞赛那支是 `track → chapter`，根本没有"年级"这一层
+///   · 章下面还挂着 `group`（方法速学 / 易错速析 / 真题速练），group 再挂
+///     `method` / `error` / `exam` —— 这三种"卡片桶"在五张表里没地方放
+///   · 深度不齐：小学是 学段→年级→册→章→节，竞赛是 竞赛→轨道→章
+/// 硬拆成五张表的代价是"382 个节点放不下"，而自引用树的代价只是"类型靠 zod 守"。
+model Node {
+  id       Int     @id @default(autoincrement())
+  /// root | book | chapter | section | point | group | method | error | exam | track
+  kind     String  @db.VarChar(16)
+  name     String  @db.VarChar(191)
+  /// 节 / 知识点 / 卡片的序号
+  no       String? @db.VarChar(32)
+  /// primary | junior | senior | olympiad（挂在 book / track 上）
+  stage    String? @db.VarChar(16)
+  /// 出处链接（book / track）
+  source   String? @db.VarChar(512)
+  /// 领域：数与代数 / 图形与几何 / 统计与概率…（章）
+  field    String? @db.VarChar(64)
+  /// 中文序号：一 / 二 / 三…（章）
+  cn       String? @db.VarChar(16)
+  /// 单元标记（章）—— 真实数据里是**布尔值**（89 个章带它），不是字符串。
+  /// 一开始写成 String 是照着 String(v) 打印出来的样子猜的，导库时才被 Prisma 拒掉。
+  unit     Boolean?
+  /// 待核对的说明（章）—— 例如"课本站这一单元只列了单元名，未与教材原书目录逐字核对"
+  pending  String? @db.Text
+  /// 分组色调：method | error | exam（group）
+  tone     String? @db.VarChar(16)
+  /// 同一父节点下的次序（前端就是按这个顺序画的）
+  order    Int     @default(0)
+
+  parentId Int?
+  parent   Node?   @relation("NodeTree", fields: [parentId], references: [id])
+  children Node[]  @relation("NodeTree")
+
+  contents Content[]
+  cards    Card[]
+
+  /* M3：学习数据也会指向节点（一格记录 / 错题 / 笔记 / 标记） */
+  learningRecords LearningRecord[]
+  mistakes        Mistake[]
+  notes           Note[]
+  pointMarks      PointMark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId, order])
+  @@index([kind])
+  @@map("node")
+}
+
+/// 正文。
+/// 挂在**任意节点**上 —— 现在唯一一篇真写的挂在「1.2 有理数·数轴」的知识点上，
+/// 以后章 / 节也可能有正文，所以不做成"只挂 section"。
+model Content {
+  id     Int    @id @default(autoincrement())
+  nodeId Int
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  html   String @db.LongText
+  /// 一节点多版本，改一次存一版（不覆盖历史）
+  version     Int       @default(1)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([nodeId, version])
+  @@map("content")
+}
+
+/// 卡片类型字典（六类）。现在写死在前端的 learning-dict.json 里，落到库后后台可调。
+model CardType {
+  name          String @id @db.VarChar(16)
+  /// 只在新卡片的默认值上用；真实卡片各自带 weight（同类型也不一样：1.0~1.5）
+  defaultWeight Float  @default(1)
+  order         Int    @default(0)
+
+  cards Card[]
+
+  @@map("card_type")
+}
+
+/// 一个节点上的卡片。
+/// 3D 轴"一格按权重切成几块"就靠它（设计稿 §3.4）—— 所以 weight **必须有**。
+model Card {
+  id     Int  @id @default(autoincrement())
+  nodeId Int
+  node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  /// 卡片在节点内的序号（1 起，前端按它排）
+  no     Int
+  /// 卡片类型；同节点内从 1 开始编号，所以这里是 no 而不是主键
+  weight Float @default(1)
+
+  typeName String   @db.VarChar(16)
+  type     CardType @relation(fields: [typeName], references: [name])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([nodeId, no])
+  @@index([typeName])
+  @@map("card")
+}
+
+// ==========================================================================
+// M2 · 账号与权限
+// ==========================================================================
+
+/// 角色。现在两个够用：admin（管理后台）/ student（学生端）。
+model Role {
+  id          Int              @id @default(autoincrement())
+  code        String           @unique @db.VarChar(32)
+  name        String           @db.VarChar(64)
+  description String?          @db.VarChar(191)
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+
+  @@map("role")
+}
+
+/// 权限点。
+/// **能不能用某个功能，判定必须在服务端**（设计稿 §3.6）—— 前端藏个按钮不算权限，
+/// 所以这里存的就是"服务端认的权限点"，接口按它放行或拒绝。
+model Permission {
+  id    Int              @id @default(autoincrement())
+  code  String           @unique @db.VarChar(64)
+  name  String           @db.VarChar(64)
+  roles RolePermission[]
+
+  @@map("permission")
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permission")
+}
+
+/// 用户。登录名用**账号**（学生端就是这个），不是邮箱 —— 学生不一定有邮箱。
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique @db.VarChar(64)
+  passwordHash String   @db.VarChar(191)
+  nickname     String   @db.VarChar(64)
+  /// 七年级（下）/ 五年级（上）…… 演示数据里就有这个字段
+  grade        String?  @db.VarChar(64)
+  roleId       Int
+  role         Role     @relation(fields: [roleId], references: [id])
+
+  resets    PasswordReset[]
+  sessions  Session[]
+
+  /* M3：一个学生自己的那些东西 */
+  learningRecords LearningRecord[]
+  exams           Exam[]
+  mistakes        Mistake[]
+  favorites       Favorite[]
+  notes           Note[]
+  pointMarks      PointMark[]
+  learningProfile LearningProfile?
+
+  /* M4 / M5 */
+  practiceSessions PracticeSession[]
+  posts            Post[]
+  replies          Reply[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([roleId])
+  @@map("user")
+}
+
+/// 重置密码的令牌。一次性，用过就作废。
+model PasswordReset {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset")
+}
+
+/// 登录会话。
+/// 为什么需要它：JWT 是**无状态**的 —— 只 clearCookie 等于只擦了客户端那一份，
+/// 令牌本身还能用到过期为止（实测：登出后旧 cookie 仍然能拿到 /api/me）。
+/// 共享设备上这就等于"没登出"。所以令牌里带一个 sid，登出即把这行标成已吊销。
+model Session {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("session")
+}
+
+// ==========================================================================
+// M3 · 学习数据（个人中心 / 学习进度 / 错题本 / 时间轴）
+// ==========================================================================
+//
+// 字段形状**照 seed 里现有那两份冻结数据来**（learning-default.json /
+// learning-students.json），不另发明一套 —— 时间轴那套视图（2D / 3D）现在读的
+// 就是那个形状，接口只要还它原样，视图层一行都不用动。
+
+/// 一格学习记录：一个学生在一个**轴节点**上的掌握情况。
+///
+/// 注意是"轴节点"不是"树节点"：轴的走法不是把树拍平（point 全上；section 只在
+/// 没有 point 子节点时上；chapter 只在没有 section/point 直接子节点时上）。
+/// 导库时逐条复刻了 assets/js/timeline-axis.js 的这套走法，卡片与记录都挂在同一批节点上。
+model LearningRecord {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodeId    Int
+  node      Node    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  /// 这一格在**轴上第几格**（0 起，共 769 格）。
+  /// 为什么单存一列：视图是**按轴下标**索引记录的（考试卷面的 paper.index 也是轴下标），
+  /// 客户端拿到数组时要能一眼放回原位；靠 service 每次现推一遍轴顺序，
+  /// 就等于把 timeline-axis.js 那套走法在第三个地方再实现一次 —— 迟早漂。
+  axisIndex Int     @default(0)
+
+  /// 0~100
+  mastery   Int     @default(0)
+  /// 未开始 / 学习中 / 初步掌握 / 已掌握 / 精通 / 待复习
+  status    String  @db.VarChar(16)
+  /// 日期一律存 `YYYY-MM-DD` 字符串，不做成 DateTime：
+  /// 冻结数据里就是"日历上的哪一天"，没有时刻也没有时区，转成 DateTime 反而会引入偏差。
+  learnedAt String? @db.VarChar(16)
+  reviewAt  String? @db.VarChar(16)
+  plannedAt String? @db.VarChar(16)
+  /// 难度（1~5）
+  diff      Float?
+  /// 学期，例如 `2020-上`
+  term      String? @db.VarChar(16)
+
+  /// 五因子 acc / solo / gap / speed / err。
+  /// 存 JSON 文本而不是五列：它只是给雷达图整块读出来用，从来不按单个因子查。
+  /// （也没有做成 Json 类型 —— SQLite 那份 schema 由这份生成，少一种类型差异就少一个坑。）
+  factors   String? @db.Text
+
+  /// 这个学生在这一格上那几张卡片的**学习状态**（diff / acc / status / at）。
+  /// 存 JSON 文本而不是单开一张表：视图是**按下标整块读**的（"第 3 张卡片"），
+  /// 从来不按里面的字段查；单开一张表只会把 type / weight 从 Card 重复一份。
+  /// 注意别和 Node 上的 Card 弄混：那边是"这一格有哪些卡片"（教学内容，全局一份），
+  /// 这边是"这个学生把这几张卡片学到哪儿了"（一人一份）。
+  cards     String? @db.Text
+
+  /// 前置没满足（"锁着"的那一格）
+  blocked   Boolean @default(false)
+
+  events    LearningEvent[]
+  marks     PointMark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, nodeId])
+  @@index([userId, axisIndex])
+  @@index([userId, status])
+  @@map("learning_record")
+}
+
+/// 一格上发生过的事（首学 / 复习 / 纠错 / 考试）—— 时间轴的圆点就是它。
+model LearningEvent {
+  id       Int            @id @default(autoincrement())
+  recordId Int
+  record   LearningRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  /// 毫秒时间戳。2020 年的毫秒数有 13 位，超过 Int 的 32 位上限，所以用 BigInt
+  /// （MySQL BIGINT / SQLite INTEGER）。出口统一转成 Number 再吐给前端。
+  at       BigInt
+  /// first | review | fix | exam
+  kind     String  @db.VarChar(16)
+  mastery  Int     @default(0)
+
+  /// 只有 exam 事件有：哪一场、考了多少
+  examCode String? @db.VarChar(16)
+  score    Int?
+  full     Int?
+  /// 只有 fix 事件有：这一题卷面拿了多少 / 满分多少
+  /// （照 assets/js/timeline-data.js 的 attachExams() 原样：`from: item.score, to: item.full`）
+  fromVal  Int?
+  toVal    Int?
+
+  @@index([recordId])
+  @@map("learning_event")
+}
+
+/// 一场考试。
+model Exam {
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// `E1`…`E15`（冻结数据里的编号）
+  code    String @db.VarChar(16)
+  name    String @db.VarChar(191)
+  at      BigInt
+  date    String @db.VarChar(16)
+  /// 这场考试覆盖轴上第几格到第几格
+  fromIdx Int
+  toIdx   Int
+  /// unit | mid | final …
+  scope   String @db.VarChar(16)
+
+  papers  ExamPaper[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, code])
+  @@index([userId])
+  @@map("exam")
+}
+
+/// 卷面上的一道题。`card` 是它考的是那一格里的第几张卡片。
+model ExamPaper {
+  id     Int  @id @default(autoincrement())
+  examId Int
+  exam   Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  /// 卷面上的题号
+  index  Int
+  full   Int
+  score  Int
+  card   Int
+  /// 还考到了别的格（JSON 数组）；空就是没有
+  also   String? @db.Text
+  /// 错因（JSON 数组）。**这一列是"是不是错题"的判据** —— 见 Mistake 的注释
+  causes String? @db.Text
+
+  @@index([examId])
+  @@map("exam_paper")
+}
+
+/// 错题。
+///
+/// **判据是"卷面这道题带错因"，不是"没拿满分"。** 这两件事差别很大：
+/// 冻结数据里 812 道卷面题有 807 道 score < full（9/10 这种），只有 158 道带 causes ——
+/// 而独立数出来的 fix 事件也正好是 158 个。按"没满分"算错题，错题本一上来就 807 条，
+/// 全站也就没有"错题"这个概念了。
+model Mistake {
+  id         Int    @id @default(autoincrement())
+  userId     Int
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// exam（考试卷面上错的）| practice（练习里错的）
+  /// 为什么要这个判别列：两种错题的字段形状**不一样** ——
+  /// 考试错的能指到"轴第几格 / 第几张卡片 / 得几分"，练习错的没有卷面，那几样全是空。
+  /// 不判别就只能给练习错题编一个假考号，错题本上就会冒出根本不存在的考试。
+  source     String @default("exam") @db.VarChar(16)
+
+  /// 挂在哪个知识点上（练习错题可能压根挂不上 —— 题目没绑节点）
+  nodeId     Int?
+  node       Node?  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  examCode   String? @db.VarChar(16)
+  /// 这一格在**轴上第几格**（不是"卷面上第几题" —— 冻数据里的字段名就叫 index，
+  /// 而 assets/js/timeline-data.js:335 是拿它当 records 的下标用的）
+  cellIndex  Int?
+  cardNo     Int?
+  /// 错因（JSON 数组）。考试那份元素形如 `{ card, key, by, acc, k }`；练习那份只有 key
+  causes     String? @db.Text
+  /// 只有练习错题用得上：直接记题号与答了什么
+  questionId Int?
+  given      String? @db.VarChar(191)
+  score      Int?
+  full       Int?
+  at         BigInt
+  /// open（还没订正）/ fixed（订正过）
+  status     String @default("open") @db.VarChar(16)
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([userId, source])
+  @@map("mistake")
+}
+
+/// 收藏。能收的不止知识点（还有方法、公式、帖子、题），所以 refId 是字符串，不是外键。
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// point | method | formula | post | question
+  kind      String   @db.VarChar(16)
+  refId     String   @db.VarChar(64)
+  title     String   @db.VarChar(191)
+  sub       String?  @db.VarChar(191)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, kind, refId])
+  @@index([userId])
+  @@map("favorite")
+}
+
+/// 笔记。可以挂在某个知识点上，也可以是一篇自由的（nodeId 为空）。
+model Note {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodeId    Int?
+  node      Node?    @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+
+  title     String   @db.VarChar(191)
+  body      String   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("note")
+}
+
+/// 掌握标记（重点 / 难点 / 待复习 / 前置未满足）。
+///
+/// 独立成表而**不是**在 LearningRecord 上再塞一个 JSON 列：标记是要"按标记筛"的
+/// （"把标了难点的都调出来"），JSON 列筛不了。一份数据只有一个出处。
+model PointMark {
+  id       Int            @id @default(autoincrement())
+  recordId Int
+  record   LearningRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  userId   Int
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodeId   Int
+  node     Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  /// key | hard | review | block
+  mark     String  @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, nodeId, mark])
+  @@index([userId, mark])
+  @@map("point_mark")
+}
+
+/// 一个学生的学习面板设置。
+///
+/// 现在只放一件东西：时间轴上"今天"那条线画在哪儿。
+/// 为什么不直接取服务器的当前日期 —— 演示数据是**按冻结的今天（2026-06-30）生成的**，
+/// 考试日期、复习节奏全围着它排；换一个真实的今天，那条线就会跑到所有考试后面去，
+/// 时间轴看着就空了。所以这个值跟数据走，一个学生一份。
+model LearningProfile {
+  userId    Int      @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todayAt   String   @db.VarChar(16)
+  updatedAt DateTime @updatedAt
+
+  @@map("learning_profile")
+}
+
+// ==========================================================================
+// M4 · 题库与做题
+// ==========================================================================
+//
+// 题库有两种东西，**必须分开**：
+//   · 可判分的题（`choice` / `blank`）—— 现在是 practice.html 里那 4 道，带正确选项与解析。
+//     抽进了 seed/practice-questions.json（导出的不是"再写一遍"，是从 HTML 原样抠的）。
+//   · 只有题面的题（`board`）—— 白板题库那 58 条，`{id, book, chapter, text}`，**没有答案**。
+//     它做不了"判分"，所以 kind 上标清楚；硬把它当练习题，一提交只能全判错。
+//   为什么非要这样分：这一版全站唯一一份**可判分**的题就是那 4 道。
+//   往后要扩题，就照 practice-questions.json 的形状往里加，不用改接口。
+
+/// 一道题。
+model Question {
+  id          Int     @id @default(autoincrement())
+  /// choice（单选）| blank（填空）| board（只有题面，判不了分）
+  kind        String  @db.VarChar(16)
+  /// 稳定编号：练习题 `p1`…，白板题用它原来的 id（`7a-01`）
+  code        String  @unique @db.VarChar(32)
+  /// 考点标签（练习题的 `quiz-tag`）
+  tag         String? @db.VarChar(191)
+  /// 题干（原样 HTML，和正文同一规矩：前端把它塞回容器就能渲染得一字不差）
+  stem        String  @db.Text
+  /// 选项，JSON 数组 `[{ key: 'A', text: '…' }]`
+  options     String? @db.Text
+  /// 填空格的说明，JSON 数组 `[{ label: '系数', answer: '-3' }]`
+  blanks      String? @db.Text
+  /// 正确答案：单选 = `B`；多空 = `-3|3`（竖线分隔，顺序对应空格）；board = null
+  answer      String? @db.VarChar(64)
+  explanation String? @db.Text
+  /// 收录来源：`practice.html` / `whiteboard-problems.js`
+  source      String? @db.VarChar(64)
+  order       Int     @default(0)
+
+  answers     PracticeAnswer[]
+
+  createdAt   DateTime @default(now())
+
+  @@index([kind])
+  @@map("question")
+}
+
+/// 一次练习（点一次"开始练"就是一条）。
+/// 为什么要有"会话"而不是直接交答案：**题目和答案是分开取的** ——
+/// 取题时不许把 answer 带给前端（那等于把答案连同链接一起发出去），
+/// 所以判分只能发生在服务端，而服务端得先记住"这一次发了哪几道题给谁"。
+model PracticeSession {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  total       Int      @default(0)
+  /// 对了几道（提交后才有）
+  correct     Int?
+  submittedAt DateTime?
+
+  answers     PracticeAnswer[]
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("practice_session")
+}
+
+model PracticeAnswer {
+  id         Int              @id @default(autoincrement())
+  sessionId  Int
+  session    PracticeSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId Int
+  question   Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  /// 学生答的：单选 `B`；多空 `-3|3`
+  given      String?  @db.VarChar(191)
+  /// 判分结果（服务端算的，前端说了不算）
+  correct    Boolean?
+  order      Int      @default(0)
+
+  @@unique([sessionId, questionId])
+  @@index([sessionId])
+  @@map("practice_answer")
+}
+
+// ==========================================================================
+// M5 · 论坛
+// ==========================================================================
+//
+// 演示数据原来存在 **localStorage** 里（assets/js/forum.js 拿它当库），
+// 所以"换个浏览器登录，帖子还在"这件事原来做不到 —— 存进库才做得到。
+
+model Board {
+  id    Int     @id @default(autoincrement())
+  /// `study` / `help` / `exam`
+  code  String  @unique @db.VarChar(32)
+  name  String  @db.VarChar(64)
+  desc  String? @db.VarChar(191)
+  note  String? @db.Text
+  order Int     @default(0)
+
+  posts Post[]
+
+  @@map("board")
+}
+
+model Post {
+  id         Int      @id @default(autoincrement())
+  boardId    Int
+  board      Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  title      String   @db.VarChar(191)
+  body       String   @db.LongText
+  /// 发帖人。演示帖的作者**没有账号**，所以 authorId 为空、名字单独存一份。
+  authorId   Int?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String   @db.VarChar(64)
+  views      Int      @default(0)
+  /// 从演示数据搬过来的那条，记一下原来的编号 —— 重导时按它认人，不会重复插
+  seedKey    String?  @unique @db.VarChar(64)
+
+  replies    Reply[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([boardId])
+  @@map("post")
+}
+
+model Reply {
+  id         Int      @id @default(autoincrement())
+  postId     Int
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId   Int?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String   @db.VarChar(64)
+  /// 演示数据里的身份，例如"热心答主"
+  role       String?  @db.VarChar(32)
+  text       String   @db.Text
+  seedKey    String?  @unique @db.VarChar(64)
+
+  createdAt  DateTime @default(now())
+
+  @@index([postId])
+  @@map("reply")
+}

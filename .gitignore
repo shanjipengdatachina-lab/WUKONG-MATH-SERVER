@@ -1,0 +1,22 @@
+# 依赖与产物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 环境变量：真值只在本机，仓库里只留 .env.example
+.env
+.env.local
+.env.*.local
+
+# 本地开发库（SQLite）与它生成出来的 schema —— 都是本地物，不进仓库
+apps/api/prisma/dev/
+*.db
+*.db-journal
+
+# 上传的文件（开发期存储驱动写这里）
+apps/api/var/
+
+# 日志与系统文件
+*.log
+npm-debug.log*
+.DS_Store
