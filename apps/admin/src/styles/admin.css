@@ -1,0 +1,85 @@
+/* ==========================================================================
+   管理后台 · 全局样式
+   --------------------------------------------------------------------------
+   要解决的是"半套主题"这件事：原来侧栏与主区刷成了深色（#141821 / #0f131a），
+   而 Element Plus 的组件还是浅色默认值 —— 于是菜单文字是近黑的 #303133 落在
+   近黑的底上，几乎看不见；白卡片浮在黑画布上；头部连底色都没有。
+   半套主题比不主题更难看，所以这里**统一走浅色**（PC 后台的常规做法），
+   只把 Element Plus 的默认蓝换成产品自己的墨绿。
+
+   取色对齐站内 assets/css/tokens.css：
+     主色 #0e7a4f · 正文 #101215 · 次级 #5b6069 · 弱 #8d939c
+     底 #f5f6f8 · 面 #ffffff · 线 #e8e9ec · 圆角 8px
+   ========================================================================== */
+
+:root {
+  /* ---- 主色：站内那支墨绿，连同 Element Plus 派生出来的几档一起给 ---- */
+  --el-color-primary: #0e7a4f;
+  --el-color-primary-light-3: #56a284;
+  --el-color-primary-light-5: #87bda7;
+  --el-color-primary-light-7: #b7d7ca;
+  --el-color-primary-light-8: #cfe4dc;
+  --el-color-primary-light-9: #e7f2ed;
+  --el-color-primary-dark-2: #0b623f;
+
+  --el-border-radius-base: 8px;
+  --el-font-size-base: 14px;
+
+  --admin-canvas: #f5f6f8;
+  --admin-surface: #ffffff;
+  --admin-line: #e8e9ec;
+  --admin-line-soft: #f0f1f3;
+  --admin-ink: #101215;
+  --admin-ink-2: #5b6069;
+  --admin-ink-3: #8d939c;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--admin-canvas);
+  color: var(--admin-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 卡片：统一边框与投影，别让每页各写一套 */
+.el-card {
+  border: 1px solid var(--admin-line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16, 18, 21, 0.04);
+}
+
+.el-card__header {
+  border-bottom: 1px solid var(--admin-line-soft);
+  font-weight: 600;
+  color: var(--admin-ink);
+}
+
+/* 表格：表头比正文淡、行高松一点，长表格看着不累 */
+.el-table th.el-table__cell {
+  background: #fafbfc !important;
+  color: var(--admin-ink-2);
+  font-weight: 500;
+}
+
+.el-table .el-table__cell { padding: 10px 0; }
+
+/* 树上每个节点之间松一点（节点里挂了好几个标签） */
+.el-tree-node__content { height: 30px; }
+
+/* 滚动条收细：后台里长列表多，粗滚动条很抢眼 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: #d7dbe0;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #c2c8cf; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }

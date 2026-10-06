@@ -6,6 +6,10 @@
         （跳了会让人以为是自己没登录，然后反复输密码，其实只是权限不够）
    ========================================================================== */
 
+/* 接口前缀。开发期 Vite 把 /api 反代到 :3000，生产是 Nginx 同域反代 ——
+   两边都是同源，所以这里一个相对路径就够（Cookie 也因此是第一方的）。 */
+export const API_BASE = '/api';
+
 export type ApiError = { status: number; code: string; message: string };
 
 export type Me = {
@@ -19,7 +23,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch('/api' + path, { ...init, headers, credentials: 'include' });
+    res = await fetch(API_BASE + path, { ...init, headers, credentials: 'include' });
   } catch (e) {
     throw { status: 0, code: 'NETWORK', message: '连不上接口服务，确认它起了没有' } as ApiError;
   }
