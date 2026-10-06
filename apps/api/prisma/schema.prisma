@@ -209,6 +209,7 @@ model User {
   posts            Post[]
   replies          Reply[]
   subscriptions    Subscription[]
+  orders           Order[]
 
   /// 停用时间。null = 正常。用时间戳而不是布尔标志：顺带记下"什么时候停的"，
   /// 判定就是 `disabledAt !== null`，不会出现"标志位说停用、时间说没停"这种两处对不上的状态。
@@ -739,9 +740,79 @@ model Subscription {
   endAt     DateTime?
   /// active | refunded
   status    String    @default("active") @db.VarChar(16)
+  /// 是哪一笔订单开通的。出事时要说得清"你这笔单到底开通了没有"
+  orderNo   String?   @db.VarChar(32)
 
   createdAt DateTime  @default(now())
 
   @@index([userId, status])
   @@map("subscription")
+}
+
+// ==========================================================================
+// M6 · 后半：下单与支付
+// ==========================================================================
+
+/// 一笔订单。
+///
+/// 下单那一刻把套餐**快照**下来（名字 / 时长 / 金额），不跟着 Plan 走：
+/// 后台改价、改名、甚至下架，都不该影响已经下过的单 ——
+/// 否则会出现"用户看着 268，付款时变成 288"这种事。
+/// 也**不给 Plan 加外键**：历史订单不该因为删掉一个套餐就读不出来
+/// （和 Mistake 那份"名字快照"同一个道理）。
+model Order {
+  id          Int    @id @default(autoincrement())
+  /// 给人看的订单号：CN + 日期 + 随机 6 位。**不拿自增 id 当订单号** ——
+  /// 那等于把"总共卖了多少单"写在脸上
+  orderNo     String @unique @db.VarChar(32)
+
+  userId      Int
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planCode    String @db.VarChar(32)
+  planName    String @db.VarChar(64)
+  /// 买的是多少天（0 = 不过期；但免费版根本不让下单）
+  days        Int
+  amountCents Int
+
+  /// pending | paid | canceled | expired
+  /// **expired 不落库**：读的时候拿 expiresAt 跟当下比现算（和权益到期同一套办法）。
+  /// 落了库就要有定时任务去翻它，漏跑一次就永远停在 pending
+  status      String @db.VarChar(16) @default("pending")
+  /// dev | wxpay | alipay —— dev 是开发用假通道，**生产环境里根本不存在**
+  channel     String @db.VarChar(16)
+
+  createdAt   DateTime  @default(now())
+  /// 待支付超时。过了它这单就废了，不该再允许支付
+  expiresAt   DateTime
+  paidAt      DateTime?
+
+  payments    Payment[]
+
+  @@index([userId, status])
+  @@map("order")
+}
+
+/// 渠道那边确认收到钱的那条记录。
+model Payment {
+  id      Int   @id @default(autoincrement())
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  channel String @db.VarChar(16)
+  /// 渠道那边的流水号。**唯一** —— 回调一定会重试，
+  /// 靠它把"同一笔钱记两次、权益开两次"挡住
+  transactionId String @unique @db.VarChar(64)
+  /// 回调里说的金额。**必须跟订单金额对得上**，对不上就拒 ——
+  /// 这是"改一个数字就白拿会员"的唯一防线
+  amountCents   Int
+  /// paid | failed
+  status        String @db.VarChar(16)
+  /// 回调原文，原样留着：出事只有它能还原"当时到底收到了什么"
+  raw           String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@map("payment")
 }

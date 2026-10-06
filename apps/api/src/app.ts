@@ -20,11 +20,17 @@ import { plansAdminRouter } from './modules/admin/plans-admin.routes.js';
 import { plansRouter } from './modules/plans/plans.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
 import { forumRouter } from './modules/forum/forum.routes.js';
+import { ordersRouter } from './modules/pay/orders.routes.js';
 
 export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  /* 支付回调**必须拿到原始报文**：签名是对着原始 body 算的，
+     解析成对象再拼回去，键的顺序一变就永远验不过 —— 而这种错只在真通道上才暴露。
+     这一条要放在 json 之前，用 raw 把整个 body 原样收下
+     （微信与支付宝的回调都不是纯 JSON）。 */
+  app.use('/api/pay/callback', express.raw({ type: '*/*', limit: '1mb' }));
   app.use(express.json({ limit: '1mb' }));
   /* 登录态在 httpOnly Cookie 里，所以要能读 cookie */
   app.use(cookieParser());
@@ -43,6 +49,7 @@ export function createApp() {
   app.use('/api', meRouter);
   app.use('/api', practiceRouter);
   app.use('/api', forumRouter);
+  app.use('/api', ordersRouter);
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(buildOpenApiDocument()));
 
   /* 兜底 404：统一响应形状，别让前端收到一坨 HTML */

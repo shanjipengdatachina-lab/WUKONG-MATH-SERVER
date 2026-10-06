@@ -40,4 +40,13 @@ export const config = {
     driver: (process.env.STORAGE_DRIVER ?? 'local') as StorageDriver,
     dir: process.env.STORAGE_DIR ?? './var/uploads',
   },
+  pay: {
+    /* 待支付超时（分钟）。过了这单就作废 —— 不留"永远可以支付"的单 */
+    orderTtlMinutes: num('PAY_ORDER_TTL_MINUTES', 30),
+
+    /* 开发用假通道的签名密钥。这个默认值是**故意不安全的**：
+       假通道在生产环境里根本不会注册（见 modules/pay/channels.ts），
+       所以漏配也带不上线；反过来，正是"它不安全"逼着人别把它带上线。 */
+    devSecret: process.env.PAY_DEV_SECRET ?? 'wk-dev-not-a-real-secret',
+  },
 };

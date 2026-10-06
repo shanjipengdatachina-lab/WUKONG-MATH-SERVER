@@ -102,7 +102,9 @@ export const DEFAULT_SERVICES: {
 export type PlanCounts = { plans: number; services: number; links: number };
 
 export async function clearPlans(prisma: PrismaClient): Promise<void> {
-  /* 依赖顺序倒着删：订阅挂在套餐上（普通外键、没有级联），要先清 */
+  /* 依赖顺序倒着删：订单挂在用户上（级联），会带走 payment，先清掉更清楚；
+     订阅挂在套餐上（普通外键、没有级联），也要在套餐之前清 */
+  await prisma.order.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.planService.deleteMany();
   await prisma.plan.deleteMany();
