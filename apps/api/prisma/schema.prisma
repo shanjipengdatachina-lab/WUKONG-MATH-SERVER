@@ -208,6 +208,7 @@ model User {
   practiceSessions PracticeSession[]
   posts            Post[]
   replies          Reply[]
+  subscriptions    Subscription[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
@@ -639,4 +640,103 @@ model Reply {
 
   @@index([postId])
   @@map("reply")
+}
+
+// ==========================================================================
+// M6 · 会员与套餐
+// ==========================================================================
+//
+// 两个维度分开放：
+//   · **套餐 Plan** —— 卖什么、多少钱、买多久。免费 / 半年 / 一年 / 三年都是套餐。
+//   · **服务项目 ServiceItem** —— 权益清单里的一行（题库、学习报告、错题本容量…）。
+//   中间那张 PlanService 是"某个套餐在这一行上给什么"：给了就是可用，
+//   还可以带一个显示值（比如"错题本容量"在免费版是"50 道"、在会员版是"不限"）。
+//   为什么不把权益写成一个 JSON 塞在套餐上：那样"改一行对所有套餐生效"就做不到，
+//   而这一行以后是要被订单/权益判定引用的（"这个人有没有会员专属题解"）。
+
+/// 套餐。
+model Plan {
+  id            Int      @id @default(autoincrement())
+  /// free | half-year | one-year | three-year
+  code          String   @unique @db.VarChar(32)
+  name          String   @db.VarChar(64)
+  /// 价格，单位**分**。用整数存钱 —— 浮点存金额早晚会差一分钱
+  priceCents    Int      @default(0)
+  /// 划线原价（0 = 不显示）
+  originalCents Int      @default(0)
+  /// 时长（天）。0 = 不过期（免费版）
+  days          Int      @default(0)
+  /// 一句话卖点
+  tagline       String?  @db.VarChar(191)
+  /// 是否标"推荐"
+  featured      Boolean  @default(false)
+  /// 是否上架（下架的不在前台出现，但历史订单还指得到它）
+  active        Boolean  @default(true)
+  order         Int      @default(0)
+
+  services      PlanService[]
+  subscriptions Subscription[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active, order])
+  @@map("plan")
+}
+
+/// 服务项目：权益对比表里的**一行**。
+model ServiceItem {
+  id     Int     @id @default(autoincrement())
+  /// 稳定编码，例如 question_bank / tutorial_3d
+  code   String  @unique @db.VarChar(32)
+  name   String  @db.VarChar(64)
+  desc   String? @db.VarChar(191)
+  order  Int     @default(0)
+  active Boolean @default(true)
+
+  plans  PlanService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("service_item")
+}
+
+/// 某个套餐在某一行服务上给什么。
+model PlanService {
+  planId    Int
+  serviceId Int
+  plan      Plan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  service   ServiceItem @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  /// 包含了这一项就是 true；false 时前台显示"—"
+  included  Boolean @default(true)
+  /// 这一格要显示的文字（"50 道" / "不限" / "进阶"）。空着就显示 ✓
+  value     String? @db.VarChar(64)
+
+  @@id([planId, serviceId])
+  @@map("plan_service")
+}
+
+/// 某个人当前买到的套餐。
+///
+/// 为什么不是"在 User 上放一个 isVip 字段"：那样说不清"到什么时候为止"，
+/// 也没法留历史。到期判定就是拿 endAt 跟当下比，不需要定时任务去改标志位
+/// （定时任务一旦漏跑，会员就变成永久的了）。
+model Subscription {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId    Int
+  plan      Plan      @relation(fields: [planId], references: [id])
+  /// 免费版可以不发这条记录；发了就按 endAt = null 表示不过期
+  startAt   DateTime  @default(now())
+  endAt     DateTime?
+  /// active | refunded
+  status    String    @default("active") @db.VarChar(16)
+
+  createdAt DateTime  @default(now())
+
+  @@index([userId, status])
+  @@map("subscription")
 }

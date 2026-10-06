@@ -19,6 +19,7 @@ import {
 } from './learning.js';
 import { clearPractice, readPracticeSeed, seedPractice, type PracticeCounts } from './practice.js';
 import { clearForum, readForumSeed, seedForum, type ForumCounts } from './forum.js';
+import { clearPlans, seedPlans, type PlanCounts } from './plans.js';
 import { buildAxisFrom } from '../modules/tree/axis.service.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -78,6 +79,7 @@ async function main(): Promise<void> {
   const learningSeed = readLearningSeed(SEED);
 
   /* ---- 1) 清空（依赖顺序：越"里面"的越先删） ---- */
+  await clearPlans(prisma);
   await clearPractice(prisma);
   await clearForum(prisma);
   await clearLearning(prisma);
@@ -265,6 +267,13 @@ async function main(): Promise<void> {
   const forumCounts: ForumCounts = await seedForum(prisma, forumSeed);
   console.log(`论坛：${forumCounts.boards} 块板 / ${forumCounts.posts} 帖 / ${forumCounts.replies} 条回复（从 localStorage 那份搬进库）`);
 
+  /* ---- 10) 会员与套餐（M6）---- */
+  const planCounts: PlanCounts = await seedPlans(prisma);
+  console.log(
+    `\n会员套餐：${planCounts.plans} 个套餐 / ${planCounts.services} 个服务项目 / ${planCounts.links} 条勾选` +
+    `（价格是演示值，在后台「套餐」页改）`,
+  );
+
   /* ---- 10) 对数：逐项比 seed/_counts.json ---- */
   const kindCounts = await prisma.node.groupBy({ by: ['kind'], _count: { _all: true } });
   const actual: Record<string, number> = {
@@ -317,6 +326,9 @@ async function main(): Promise<void> {
     ['论坛板', counts.forumBoards ?? 0, await prisma.board.count()],
     ['论坛帖', counts.forumPosts ?? 0, await prisma.post.count()],
     ['论坛回复', forumSeed.posts.reduce((a, p) => a + (p.floors ? p.floors.length : 0), 0), await prisma.reply.count()],
+    ['套餐', planCounts.plans, await prisma.plan.count()],
+    ['服务项目', planCounts.services, await prisma.serviceItem.count()],
+    ['套餐×服务', planCounts.links, await prisma.planService.count()],
   ];
 
   console.log('\n导库对数（seed/ 现算  vs  库里实际）：');

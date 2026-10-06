@@ -16,6 +16,8 @@ import { authRouter } from './modules/auth/auth.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { meRouter } from './modules/me/me.routes.js';
 import { treeAdminRouter } from './modules/admin/tree-admin.routes.js';
+import { plansAdminRouter } from './modules/admin/plans-admin.routes.js';
+import { plansRouter } from './modules/plans/plans.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
 import { forumRouter } from './modules/forum/forum.routes.js';
 
@@ -35,6 +37,8 @@ export function createApp() {
   app.use('/api', contentRouter);
   app.use('/api', authRouter);
   app.use('/api', treeAdminRouter);
+  app.use('/api', plansAdminRouter);
+  app.use('/api', plansRouter);
   app.use('/api', adminRouter);
   app.use('/api', meRouter);
   app.use('/api', practiceRouter);

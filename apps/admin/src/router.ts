@@ -10,6 +10,7 @@ const routes = [
       { path: '', name: 'home', component: () => import('./views/Home.vue'), meta: { title: '概览' } },
       { path: 'tree', name: 'tree', component: () => import('./views/Tree.vue'), meta: { title: '知识结构' } },
       { path: 'users', name: 'users', component: () => import('./views/Users.vue'), meta: { title: '用户', perm: 'user.read' } },
+      { path: 'plans', name: 'plans', component: () => import('./views/Plans.vue'), meta: { title: '套餐与服务项目', perm: 'plan.write' } },
     ],
   },
 ];

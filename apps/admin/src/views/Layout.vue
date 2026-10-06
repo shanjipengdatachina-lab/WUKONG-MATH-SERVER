@@ -20,6 +20,10 @@
         </el-menu-item>
         <!-- 菜单按权限显隐。注意：**这只是显隐**，真正的放行在服务端（requirePerm）——
              前端藏一个入口不算权限，直接敲地址照样要被 403 挡住。 -->
+        <el-menu-item v-if="can('plan.write')" index="/plans">
+          <el-icon><Money /></el-icon>
+          <span>套餐与权益</span>
+        </el-menu-item>
         <el-menu-item v-if="can('user.read')" index="/users">
           <el-icon><User /></el-icon>
           <span>用户</span>
@@ -58,7 +62,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Odometer, Share, User } from '@element-plus/icons-vue';
+import { Odometer, Share, User, Money } from '@element-plus/icons-vue';
 import { api, auth, can, API_BASE } from '../api';
 
 const route = useRoute();
