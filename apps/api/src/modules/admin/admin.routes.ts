@@ -12,6 +12,11 @@ import { prisma } from '../../db.js';
 import { requireAuth, requirePerm } from '../../middleware/auth.js';
 import { channelOf } from '../pay/channels.js';
 import { statusOf } from '../pay/pay.service.js';
+/* 学生详情页要用的两块，都**复用学生端那一处**，不在这里另写一套：
+   · currentEntitlement —— 套餐判定的唯一出处（会员到期也是它算的）
+   · sliceReport       —— 考情切片报告的同一个函数（老师看到的数与学生看到的一致） */
+import { currentEntitlement } from '../plans/plans.routes.js';
+import { sliceReport } from '../slices/slice-report.service.js';
 
 const Stats = z.object({
   nodes: z.record(z.string(), z.number()).describe('按 kind 分组的节点数'),
@@ -243,5 +248,128 @@ adminRouter.get('/admin/orders', requireAuth, requirePerm('order.read'), async (
       pendingCount: items.filter((i) => i.status === 'pending').length,
       expiredCount: items.filter((i) => i.status === 'expired').length,
     },
+  });
+});
+
+/* ---- 一个学生的全部情况 ----
+   用户 2026-10-07："管理后台在用户详情里得有这个学生的所有的情况和信息，
+   考试成绩，报告，学习进度，报表等等。"
+
+   **只读。** 这一页干的事是"把散在各处的数摆到同一屏里给老师看"；
+   改数据仍然走各自那一处（角色 / 停用在本文件上面，切片在学生自己那儿）。
+   在这个页面上顺手加一个"改分数"，就等于开了第二个入口 —— 两边迟早对不上。
+
+   一次请求把六块一起取回来：拆成六个接口的话，老师会看到六个各自转圈的方块，
+   而这六块本来就该一起看。
+   ========================================================================== */
+adminRouter.get('/admin/users/:id/overview', requireAuth, requirePerm('user.read'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { code: 'BAD_INPUT', message: '用户 id 不对' } });
+    return;
+  }
+  const u = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+  if (!u) {
+    res.status(404).json({ error: { code: 'NO_USER', message: '没有这个用户' } });
+    return;
+  }
+
+  const [ent, orders, records, exams, slices, report, tally] = await Promise.all([
+    currentEntitlement(id),
+    prisma.order.findMany({ where: { userId: id }, orderBy: { id: 'desc' }, take: 50 }),
+    prisma.learningRecord.findMany({
+      where: { userId: id },
+      include: { _count: { select: { events: true, marks: true } } },
+    }),
+    prisma.exam.findMany({
+      where: { userId: id },
+      orderBy: { at: 'asc' },
+      include: { papers: { select: { score: true, full: true, causes: true } } },
+    }),
+    prisma.examSlice.findMany({
+      where: { userId: id },
+      orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      include: {
+        images: { select: { file: true } },
+        boxes: { select: { nodeId: true } },
+        nodes: { select: { nodeId: true } },
+      },
+    }),
+    /* 报告用**学生看的那同一个函数**出，不另算一套 ——
+       两套算法迟早给出两个"平均得分率"，老师照着哪个数说话都可能是错的。 */
+    sliceReport(id),
+    Promise.all([
+      prisma.mistake.count({ where: { userId: id } }),
+      prisma.mistake.count({ where: { userId: id, status: 'open' } }),
+      prisma.favorite.count({ where: { userId: id } }),
+      prisma.note.count({ where: { userId: id } }),
+      prisma.post.count({ where: { authorId: id } }),
+      prisma.reply.count({ where: { authorId: id } }),
+    ]),
+  ]);
+
+  /* 学过 = 有 learnedAt 的那几格。掌握度平均**只按学过的算** ——
+     没学过的不进平均，和切片报告同一个口径：不拿 0 顶替。 */
+  const learned = records.filter((r) => r.learnedAt);
+  const masterySum = learned.reduce((s, r) => s + r.mastery, 0);
+  const [mistakes, mistakesOpen, favorites, notes, posts, replies] = tally;
+
+  res.json({
+    user: toRow(u),
+    membership: {
+      planCode: ent.plan ? ent.plan.code : null,
+      planName: ent.plan ? ent.plan.name : null,
+      isMember: ent.isMember,
+      endAt: ent.endAt ? ent.endAt.toISOString() : null,
+      daysLeft: ent.daysLeft,
+    },
+    orders: orders.map((o) => {
+      const ch = channelOf(o.channel);
+      return {
+        orderNo: o.orderNo, planCode: o.planCode, planName: o.planName,
+        amountCents: o.amountCents,
+        /* 状态读的时候现算 —— 和后台订单页、和学生自己那一页共用 statusOf */
+        status: statusOf(o),
+        channel: o.channel, channelName: ch ? ch.name : o.channel, isTest: !!ch?.isTest,
+        createdAt: o.createdAt.toISOString(),
+        paidAt: o.paidAt ? o.paidAt.toISOString() : null,
+      };
+    }),
+    exams: exams.map((e) => {
+      const score = e.papers.reduce((s, p) => s + p.score, 0);
+      const full = e.papers.reduce((s, p) => s + p.full, 0);
+      return {
+        code: e.code, name: e.name, date: e.date,
+        score, full,
+        rate: full > 0 ? Math.round((score / full) * 1000) / 1000 : null,
+        /* "错题"的判据是**卷面这道题带错因**，不是"没拿满分" —— 见 schema 里 Mistake 那段 */
+        wrong: e.papers.filter((p) => p.causes !== null).length,
+      };
+    }),
+    slices: {
+      total: slices.length,
+      items: slices.map((s) => ({
+        id: s.id, name: s.name, date: s.date, subject: s.subject, paperType: s.paperType,
+        score: s.score, full: s.full,
+        rate: s.score !== null && s.full !== null && s.full > 0
+          ? Math.round((s.score / s.full) * 1000) / 1000
+          : null,
+        note: s.note,
+        images: s.images.length,
+        boxes: s.boxes.length,
+        nodes: s.nodes.length,
+      })),
+      report,
+    },
+    learning: {
+      records: records.length,
+      learned: learned.length,
+      mastered: learned.filter((r) => r.mastery >= 85).length,
+      masteryAvg: learned.length ? Math.round(masterySum / learned.length) : null,
+      events: records.reduce((s, r) => s + r._count.events, 0),
+      marks: records.reduce((s, r) => s + r._count.marks, 0),
+      blocked: records.filter((r) => r.blocked).length,
+    },
+    content: { mistakes, mistakesOpen, favorites, notes, posts, replies },
   });
 });

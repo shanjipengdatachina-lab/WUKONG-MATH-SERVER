@@ -71,7 +71,12 @@ import { api, auth, can, API_BASE } from '../api';
 
 const route = useRoute();
 const router = useRouter();
-const active = computed(() => route.path);
+/* 菜单高亮看**第一段**：在 /users/144 这类子页面上，「用户」那一条也该亮着 ——
+   直接拿 route.path 去比的话，一进详情页左侧就没有任何一项是选中的。 */
+const active = computed(() => {
+  const seg = route.path.split('/').filter(Boolean)[0];
+  return seg ? `/${seg}` : '/';
+});
 const title = computed(() => (route.meta.title as string) || '');
 const apiBase = API_BASE;
 

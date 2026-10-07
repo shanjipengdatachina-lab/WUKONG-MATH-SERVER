@@ -11,9 +11,10 @@
 
     <el-table v-loading="loading" :data="rows" stripe>
       <el-table-column prop="id" label="#" width="70" />
-      <el-table-column label="账号" min-width="150">
+      <el-table-column label="账号" min-width="170">
         <template #default="{ row }">
-          <span class="mono">{{ row.username }}</span>
+          <!-- 点账号进详情 —— "这一行是谁"最自然的下钻入口就在名字上 -->
+          <router-link class="mono link" :to="`/users/${row.id}`">{{ row.username }}</router-link>
           <el-tag v-if="isSelf(row)" size="small" effect="plain" class="self">就是你</el-tag>
         </template>
       </el-table-column>
@@ -55,8 +56,9 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" @click="openDetail(row)">详情</el-button>
           <el-button
             v-if="row.disabledAt"
             size="small"
@@ -84,6 +86,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, auth, type ApiError } from '../api';
 
@@ -97,6 +100,13 @@ const error = ref('');
 const loading = ref(false);
 /** 正在提交的那一行 —— 提交期间禁掉它自己的控件，免得连点两下 */
 const busy = ref<number | null>(null);
+
+const router = useRouter();
+
+/** 下钻到"这一个学生的全部情况"。**只读页** —— 改还是走这一行上的角色/停用。 */
+function openDetail(row: Row): void {
+  void router.push(`/users/${row.id}`);
+}
 
 /** 库里存的是 ISO 时间；直接摆给人看太生硬，换成"2026-10-05 22:31"。 */
 function when(iso: string): string {
@@ -179,6 +189,8 @@ onMounted(load);
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .head__note { font-size: 12px; font-weight: 400; color: var(--admin-ink-3); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.link { color: var(--el-color-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
 .dim { color: var(--admin-ink-3); }
 .small { font-size: 11px; margin-top: 2px; }
 .self { margin-left: 6px; }
