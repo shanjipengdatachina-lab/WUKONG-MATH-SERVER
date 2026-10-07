@@ -176,10 +176,11 @@ const TONES = [
   { key: 'method', label: '方法速学' },
   { key: 'error', label: '易错速析' },
   { key: 'exam', label: '真题速练' },
+  { key: 'formula', label: '公式速查' },
 ];
 const KIND_CN: Record<string, string> = {
   root: '根', book: '册', chapter: '章', section: '节', point: '知识点',
-  group: '组', method: '方法', error: '易错', exam: '真题', track: '竞赛轨道',
+  group: '组', method: '方法', error: '易错', exam: '真题', formula: '公式', track: '竞赛轨道',
 };
 
 type Detail = {
@@ -224,7 +225,7 @@ const childKinds = computed(() => Object.keys(KIND_CN).filter((k) => k !== 'root
 
 const DEFAULT_CHILD: Record<string, string> = {
   root: 'book', book: 'chapter', track: 'chapter', chapter: 'section',
-  section: 'point', point: 'method', group: 'method', method: 'noop', error: 'noop', exam: 'noop',
+  section: 'point', point: 'method', group: 'method', method: 'noop', error: 'noop', exam: 'noop', formula: 'noop',
 };
 
 function kindLabel(k: string): string { return KIND_CN[k] || k; }

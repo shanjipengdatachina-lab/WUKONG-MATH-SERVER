@@ -39,6 +39,11 @@ export const config = {
     /* 开发期 local（写本地目录），生产换 oss —— 只改这一行配置，代码不动 */
     driver: (process.env.STORAGE_DRIVER ?? 'local') as StorageDriver,
     dir: process.env.STORAGE_DIR ?? './var/uploads',
+
+    /* 孤儿上传图清理（见 modules/uploads/sweep.service.ts）：
+       间隔 0 = 不起这个活；宽限期 = 多久没进过库才算"没人要了" */
+    sweepMinutes: num('UPLOAD_SWEEP_MINUTES', 360),
+    sweepMinAgeHours: num('UPLOAD_SWEEP_MIN_AGE_HOURS', 24),
   },
   pay: {
     /* 待支付超时（分钟）。过了这单就作废 —— 不留"永远可以支付"的单 */

@@ -84,7 +84,7 @@ type TreeNode = {
 
 const KIND_CN: Record<string, string> = {
   root: '根', book: '册', chapter: '章', section: '节', point: '知识点',
-  group: '组', method: '方法', error: '易错', exam: '真题', track: '竞赛轨道',
+  group: '组', method: '方法', error: '易错', exam: '真题', formula: '公式', track: '竞赛轨道',
 };
 
 const tree = ref<TreeNode | null>(null);

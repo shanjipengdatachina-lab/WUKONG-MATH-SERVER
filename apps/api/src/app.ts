@@ -19,10 +19,14 @@ import { treeAdminRouter } from './modules/admin/tree-admin.routes.js';
 import { plansAdminRouter } from './modules/admin/plans-admin.routes.js';
 import { plansRouter } from './modules/plans/plans.routes.js';
 import { practiceRouter } from './modules/practice/practice.routes.js';
-import { forumRouter } from './modules/forum/forum.routes.js';
+import { forumRouter, forumAdminRouter } from './modules/forum/forum.routes.js';
+import { classesRouter } from './modules/classes/classes.routes.js';
+import { studentDataRouter } from './modules/classes/student-data.routes.js';
+import { studentWriteRouter } from './modules/classes/student-write.routes.js';
 import { ordersRouter } from './modules/pay/orders.routes.js';
 import { uploadsRouter } from './modules/uploads/uploads.routes.js';
 import { slicesRouter } from './modules/slices/slices.routes.js';
+import { examsRouter, examsAdminRouter } from './modules/exams/exams.routes.js';
 import { uploadsRoot } from './modules/uploads/storage.service.js';
 import { requestId, accessLog } from './middleware/request-log.js';
 
@@ -56,9 +60,15 @@ export function createApp() {
   app.use('/api', meRouter);
   app.use('/api', practiceRouter);
   app.use('/api', forumRouter);
+app.use('/api', forumAdminRouter);
+app.use('/api', classesRouter);
+app.use('/api', studentDataRouter);
+app.use('/api', studentWriteRouter);
   app.use('/api', ordersRouter);
   app.use('/api', uploadsRouter);
   app.use('/api', slicesRouter);
+  app.use('/api', examsRouter);
+  app.use('/api', examsAdminRouter);
 
   /* 学生上传的卷子照片。开发期由接口自己发；生产是 Nginx 直接发那个卷（见 deploy/nginx.conf）。
      文件名是服务端随机生成的、不含任何用户输入，所以可以放心长缓存。 */

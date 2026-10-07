@@ -25,8 +25,9 @@ import { registry } from '../../openapi.js';
 import { prisma } from '../../db.js';
 import { requireAuth, requirePerm } from '../../middleware/auth.js';
 
-/* 10 种节点（与 tree.service.ts 里那份说明一致） */
-const KINDS = ['root', 'book', 'chapter', 'section', 'point', 'group', 'method', 'error', 'exam', 'track'] as const;
+/* 11 种节点（与 tree.service.ts 里那份说明一致）。
+   formula 是 2026-10-07 加的第四种"卡片桶"：方法速学 / 易错速析 / 真题速练 / 公式速查。 */
+const KINDS = ['root', 'book', 'chapter', 'section', 'point', 'group', 'method', 'error', 'exam', 'formula', 'track'] as const;
 
 /** 每种节点允许带哪些补充字段（照 seed/math-tree.json 的实际情况定的，不是猜的） */
 const KIND_FIELDS: Record<string, string[]> = {
@@ -40,6 +41,7 @@ const KIND_FIELDS: Record<string, string[]> = {
   method: ['no'],
   error: ['no'],
   exam: ['no'],
+  formula: ['no'],
 };
 
 const NodeFields = {

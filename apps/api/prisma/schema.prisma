@@ -83,6 +83,7 @@ model Node {
   pointMarks      PointMark[]
   /* H：考试切片说"这次考到哪几章" */
   examSliceNodes  ExamSliceNode[]
+  examQuestions ExamQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -191,6 +192,14 @@ model User {
   nickname     String   @db.VarChar(64)
   /// 七年级（下）/ 五年级（上）…… 演示数据里就有这个字段
   grade        String?  @db.VarChar(64)
+  /// primary | junior | senior | olympiad —— 与 Node.stage **同一套取值**，不另发明一套。
+  /// 为什么不用 grade 文本分组：那是自由文本，「七年级（下）」与「初一」都可能是同一个学段，
+  /// 靠字符串匹配分组迟早错。grade 仍然留着显示，但分组一律看 stage。
+  stage        String?  @db.VarChar(16)
+  /// 班级。**一个学生一个班** —— 真实里学生就在一个教学班；允许跨班的话，
+  /// 花名册 / 平均分 / 进度每个数都要先问「算哪个班的」，那点灵活性换不来这份复杂度。
+  classId      Int?
+  class        Class?   @relation("ClassStudents", fields: [classId], references: [id], onDelete: SetNull)
   roleId       Int
   role         Role     @relation(fields: [roleId], references: [id])
 
@@ -206,6 +215,14 @@ model User {
   pointMarks      PointMark[]
   learningProfile LearningProfile?
 
+  /// 这个人是哪些班的班主任（老师账号用）
+  teacherOf        Class[] @relation("ClassTeacher")
+
+  /// 他改过谁的数（留痕）
+  changesMade      DataChange[] @relation("ChangeActor")
+  /// 他的数被谁改过（留痕）
+  changesOnMe      DataChange[] @relation("ChangeTarget")
+
   /* M4 / M5 */
   practiceSessions PracticeSession[]
   posts            Post[]
@@ -213,6 +230,7 @@ model User {
   subscriptions    Subscription[]
   orders           Order[]
   examSlices       ExamSlice[]
+  examQuestionsCreated ExamQuestion[]
 
   /// 停用时间。null = 正常。用时间戳而不是布尔标志：顺带记下"什么时候停的"，
   /// 判定就是 `disabledAt !== null`，不会出现"标志位说停用、时间说没停"这种两处对不上的状态。
@@ -252,6 +270,87 @@ model Session {
 
   @@index([userId])
   @@map("session")
+}
+
+// ==========================================================================
+// M2 续 · 班级（学生管理模块）
+// ==========================================================================
+
+/// 一个教学班。**按学段分栏管理**（小学 / 初中 / 高中 / 奥赛），所以 stage 是它的一等字段。
+///
+/// 班主任指向 User，不另建「老师表」—— 老师要么是能登录的教师账号（role=teacher），
+/// 要么这一轮还不支持（先给 ta 建个账号）。
+model Class {
+  id      Int     @id @default(autoincrement())
+  name    String  @db.VarChar(64)
+  /// primary | junior | senior | olympiad
+  stage   String  @db.VarChar(16)
+  /// 年级，例如 五年级（上）/ 七年级（下）。奥赛班没有年级，允许留空
+  grade   String? @db.VarChar(64)
+
+  teacherId Int?
+  /// onDelete: SetNull —— **删班不该把老师一起删掉**，老师是个人
+  teacher   User? @relation("ClassTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+
+  /// 备注：上课时间、教材版本这类
+  note   String? @db.VarChar(5000)
+  order  Int     @default(0)
+  active Boolean @default(true)
+
+  students User[] @relation("ClassStudents")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stage, order])
+  @@map("class")
+}
+
+// ==========================================================================
+// M2 续 · 后台改学生数据的留痕（模块 E）
+// ==========================================================================
+
+/// 后台改动学生数据留下的痕迹。
+///
+/// **每一次改动都必须写一条**，而且是和改动本身在**同一个事务**里写 ——
+/// 这是"允许后台做第二个入口"的前提：学生说"我明明是 85 分"的时候，
+/// 要查得出是谁、什么时候、从多少改成了多少、为什么。
+///
+/// 谁都不能绕过去：编辑一律走 change-log.service 的 applyChange()，
+/// 它把"写库"和"写留痕"按一个事务提交 —— 留痕写不进去，改动也一起回滚。
+model DataChange {
+  id      Int    @id @default(autoincrement())
+  /// 同一次保存产生的一批改动共用一个 batchId，回放时能看成"一次操作"
+  batchId String @db.VarChar(32)
+
+  actorId Int
+  /// **Restrict 而不是 Cascade**：删了执行人，"谁改的"就成空白，而留痕的价值恰恰在那个人身上。
+  /// 所以执行过改动的管理员账号删不掉 —— 这是刻意的。
+  actor   User @relation("ChangeActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  /// 改的是**谁的数据**（不是谁改的）。查一个学生的变更历史走这个。
+  targetId Int
+  /// 学生被删时他的数据一起没了，留痕跟着走是一致的，不会留下指向空学生的孤儿记录。
+  target   User @relation("ChangeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  /// learning_record | learning_event | mistake | exam | exam_paper | exam_slice | note | favorite | practice_session
+  entity   String  @db.VarChar(32)
+  entityId String  @db.VarChar(32)
+  /// 给人看的说明（"七年级（上）/ 有理数 / 1.2 数轴"这种），免得回放时看不懂改的是哪一条
+  label    String  @db.VarChar(191)
+  /// 改动的字段名；删除整条时记 delete
+  field    String  @db.VarChar(48)
+  oldValue String? @db.Text
+  newValue String? @db.Text
+  /// 为什么改。允许留空，但界面上要催一下
+  reason   String? @db.VarChar(191)
+
+  createdAt DateTime @default(now())
+
+  @@index([targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([batchId])
+  @@map("data_change")
 }
 
 // ==========================================================================
@@ -561,6 +660,10 @@ model PracticeSession {
   total       Int      @default(0)
   /// 对了几道（提交后才有）
   correct     Int?
+  /// 其中**判得了分**的有几道（提交后才有）。
+  /// 白板题（kind=board）只有题面、没有答案 —— 它们记「做了」但不参与判分，
+  /// 所以正确率的分母只能是这一列，不能拿 total 当分母（那等于把白板题全判成错的）。
+  judged      Int?
   submittedAt DateTime?
 
   answers     PracticeAnswer[]
@@ -623,6 +726,10 @@ model Post {
   views      Int      @default(0)
   /// 从演示数据搬过来的那条，记一下原来的编号 —— 重导时按它认人，不会重复插
   seedKey    String?  @unique @db.VarChar(64)
+  /// 置顶时间。null = 没置顶；管理员置顶后置为当前时间，列表里按它 desc 排前面
+  pinnedAt   DateTime?
+  /// 加精时间。null = 没加精；管理员加精后置为当前时间，列表里挂个精标
+  goodAt     DateTime?
 
   replies    Reply[]
 
@@ -912,6 +1019,82 @@ model ExamSliceNode {
 }
 
 /// 渠道那边确认收到钱的那条记录。
+// ==========================================================================
+// B · 真题题库
+// ==========================================================================
+//
+// 与 `Question`（M4 的练习题）**是两回事**，互不合并：
+//   Question      —— 演示阶段那 4 道「考点速练」练习题，结构简单、不带年份与章节
+//   ExamQuestion  —— 中考 / 高考 / 模拟卷上抠下来的真题：年份、地区、来源、章节、难度
+//
+// 为什么不复用 Question：
+//   1. 字段形状不一样 —— 真题要按"年份 / 地区 / 卷型"筛，练习题不用；
+//   2. 真题要绑到知识树的一个**章 / 节 / 点**上做"按章练习"，练习题没有这一层；
+//   3. Question 上没有 year / region / paperType / difficulty 这几列，
+//      硬加进去那 4 道演示题就全是空值，跟真题混在一起筛不动。
+//
+// 真题的"题干 / 选项 / 答案 / 解析"字段形状**照 Question 同一套** ——
+// stem 是 HTML 文本、options / blanks 是 JSON、answer 是单值或竖线分隔多空。
+// 这样判分函数能直接复用 practice 那一份（同一种格式只写一次判分）。
+
+/// 一道真题。
+model ExamQuestion {
+  id          Int      @id @default(autoincrement())
+  /// choice（单选）| blank（填空）| board（只有题面，判不了分）
+  /// 和 Question.kind 取值集合**保持一致** —— 判分走同一个函数。
+  kind        String   @db.VarChar(16)
+  /// 稳定编号：录入时给一个，例如 `2024-bj-01`。不填就由 id 当编号。
+  code        String   @unique @db.VarChar(64)
+  /// 题干（原样 HTML，和正文同一规矩：塞回容器就一字不差地渲染）
+  stem        String   @db.LongText
+  /// 选项，JSON 数组 `[{ key: "A", text: "…" }]`；非选择题为空
+  options     String?  @db.Text
+  /// 填空格说明，JSON 数组 `[{ label: "系数", answer: "-3" }]`
+  blanks      String?  @db.Text
+  /// 正确答案：单选 = `B`；多空 = `-3|3`；board = null
+  answer      String?  @db.VarChar(64)
+  /// 解析（HTML）。会员可见，免费看不到 —— 判分在 service 端
+  explanation String?  @db.LongText
+
+  /// 年份（4 位，例如 2024）。**整数** —— 给个 0 是"年份不详"，不算 null
+  year        Int
+  /// 地区 / 城市 / 命题单位：北京 / 上海 / 全国卷Ⅰ / 海淀区二模 …
+  region      String   @db.VarChar(64)
+  /// 卷型：中考 / 高考 / 模拟 / 期中 / 期末
+  paperType   String   @db.VarChar(32)
+  /// 题型：选择题 / 填空题 / 解答题 / 证明题 / 综合题（中文，给前台筛）
+  qtype       String   @db.VarChar(32)
+  /// 难度（1~5）—— 录入时老师估，学生练习后可被实际得分率覆盖（这一版不做）
+  difficulty  Int      @default(3)
+  /// 题号（卷面上的），例如「第 15 题」—— 录入时可空
+  no          String?  @db.VarChar(16)
+
+  /// 这道题挂哪个章节 / 知识点。**真外键 + SetNull**：
+  /// 知识点删了，题目也跟着掉挂靠但题面留着 —— 真题是后台录入的内容资产，
+  /// 不是学生的学习记录，删管理员不该把题删掉、删节点也不该把题删掉。
+  /// （和 Mistake 那种"要保历史名字快照"不一样 —— 这里 nodeId 没了就是没了。）
+  nodeId      Int?
+  node        Node?    @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+
+  /// 来源备注：哪本教辅、第几页 / 网址 —— 一行自由文本
+  source      String?  @db.VarChar(191)
+
+  /// 录入人（管理员）。删管理员不该把题目删掉 —— 这条是内容资产，不是个人数据
+  creatorId   Int?
+  creator     User?    @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([year])
+  @@index([region])
+  @@index([paperType])
+  @@index([qtype])
+  @@index([nodeId])
+  @@index([difficulty])
+  @@map("exam_question")
+}
+
 model Payment {
   id      Int   @id @default(autoincrement())
   orderId Int

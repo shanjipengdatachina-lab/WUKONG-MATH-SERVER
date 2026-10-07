@@ -36,4 +36,10 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "dist/main.js"]
+# 起服务**之前**先把迁移跑到最新：`migrate deploy` 是幂等的，没有新的就什么都不做。
+# **迁移失败就不启动** —— 与其带着半截表结构对外服务，不如让容器起不来、看得见。
+# `exec` 不能省：不写的话 node 是 sh 的子进程，docker stop 的 SIGTERM 落在 sh 上，
+# 进程收不到信号、只能等超时被强杀。
+# 这一步靠镜像里那份 prisma CLI（现在在 devDependencies，单段构建所以带着）——
+# 以后要是收敛成多段构建，别忘了把它带进去，否则容器起不来。
+CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && exec node dist/main.js"]

@@ -1,0 +1,4 @@
+# Prisma 自己写的锁文件，别手改。
+# 它记的是"这套迁移跑在哪种库上" —— 我们生产是 MySQL 8，
+# 本地开发那份 SQLite（prisma/dev/）**不走迁移**，只走 db push。
+provider = "mysql"

@@ -9,7 +9,10 @@
   "scripts": {
     "api:dev": "npm run dev -w @wukong-math/api",
     "api:typecheck": "npm run typecheck -w @wukong-math/api",
-    "db:dev": "npm run db:dev -w @wukong-math/api"
+    "db:dev": "npm run db:dev -w @wukong-math/api",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w @wukong-math/api",
+    "db:migrate:status": "npm run db:migrate:status -w @wukong-math/api",
+    "db:migrate:check": "npm run db:migrate:check -w @wukong-math/api"
   },
   "engines": {
     "node": ">=20"

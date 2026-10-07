@@ -1,0 +1,1073 @@
+{
+  "note": "演示用的练习记录。**这是造的，不是真人做的题** —— 见 practice-sessions.ts 的说明。",
+  "why": "全站只有 4 道可判分题（p1~p4），seed 里 0 次练习会话，导致\"习题量/正确率\"这两个指标恒为 0，连接口算得对不对都验不了。",
+  "scope": "只从 p1~p4 里抽题（一份会话内不重复）—— 58 道白板题（kind=board）没有答案、判不了分，给它们编一个 correct 就是在编一件系统自己说做不到的事。",
+  "codes": [
+    "p1",
+    "p2",
+    "p3",
+    "p4"
+  ],
+  "students": {
+    "student": {
+      "sessions": [
+        {
+          "daysAgo": 88,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 83,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 78,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 76,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 71,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 66,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 62,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 55,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 50,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 47,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 41,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 38,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 32,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 29,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 24,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 20,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 15,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 10,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 5,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 0,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        }
+      ]
+    },
+    "zhouyutong": {
+      "sessions": [
+        {
+          "daysAgo": 88,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 84,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 79,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 74,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 69,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 65,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 61,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 55,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 53,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 48,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 41,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 37,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 32,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 29,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 24,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 20,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 15,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 11,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 6,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 0,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        }
+      ]
+    },
+    "chenzihang": {
+      "sessions": [
+        {
+          "daysAgo": 89,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 83,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 79,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 75,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 70,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 67,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 60,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 56,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 51,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 46,
+          "answers": [
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 43,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 37,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 33,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 28,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": false
+            },
+            {
+              "code": "p4",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 22,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": false
+            },
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": false
+            },
+            {
+              "code": "p3",
+              "correct": false
+            }
+          ]
+        },
+        {
+          "daysAgo": 19,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 16,
+          "answers": [
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 11,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 6,
+          "answers": [
+            {
+              "code": "p1",
+              "correct": true
+            },
+            {
+              "code": "p2",
+              "correct": true
+            },
+            {
+              "code": "p3",
+              "correct": true
+            }
+          ]
+        },
+        {
+          "daysAgo": 0,
+          "answers": [
+            {
+              "code": "p3",
+              "correct": true
+            },
+            {
+              "code": "p4",
+              "correct": true
+            },
+            {
+              "code": "p1",
+              "correct": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

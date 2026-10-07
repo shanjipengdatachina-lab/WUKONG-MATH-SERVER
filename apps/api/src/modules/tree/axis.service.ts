@@ -7,7 +7,7 @@
        section 只在**没有 point 子节点**时上（有知识点就让位给知识点）
        chapter 只在**没有 section / point 直接子节点**时上
                （竞赛那四支的章底下只有章名，不认这一步整段竞赛就会从轴上消失）
-       group / method / error / exam / book / track / root  一律不上
+       group / method / error / exam / formula / book / track / root  一律不上
        （group 那三类是"知识点卡片里的料"，不是学习路径上的一格）
 
    规则**逐条对照** assets/js/timeline-axis.js 的 buildAxis() 写的。

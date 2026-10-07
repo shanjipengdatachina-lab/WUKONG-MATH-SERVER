@@ -15,8 +15,14 @@
     "db:gen": "prisma generate --schema prisma/schema.prisma",
     "db:dev": "node tools/dev-schema.mjs && prisma db push --schema prisma/dev/schema.prisma && prisma generate --schema prisma/dev/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:migrate:status": "prisma migrate status --schema prisma/schema.prisma",
+    "db:migrate:check": "node tools/check-migrations.mjs",
     "db:studio": "prisma studio --schema prisma/dev/schema.prisma",
-    "db:seed": "tsx src/seed/import.ts"
+    "db:seed": "tsx src/seed/import.ts",
+    "db:seed:formulas": "tsx src/seed/formulas.ts",
+    "db:seed:practice": "tsx src/seed/practice-sessions.ts",
+    "uploads:sweep": "tsx src/modules/uploads/sweep.service.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",

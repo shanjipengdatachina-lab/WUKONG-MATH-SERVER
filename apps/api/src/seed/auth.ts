@@ -30,6 +30,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
 
   /* 这个就是线上那个演示学生：PROGRESS 43.7% / DEFAULT_SEED 20260929。
      他手上那份（含 15 场考试与 336 格轨迹）冻在 learning-default.json 里。 */
+  { username: 'teacher', password: 'wk-teacher-2026', nickname: '王老师', role: 'teacher' },
   { username: 'student', password: 'wk-demo-2026', nickname: '林一鸣', role: 'student', grade: '七年级（下）', learning: 'default' },
 
   /* 另外两位：各自那一份在 learning-students.json 里（有轨迹、没有考试）。 */
@@ -43,16 +44,25 @@ export const PERMS: [string, string][] = [
   ['content.write', '改章节与正文'],
   ['tree.write', '改知识树'],
   ['exam.write', '录真题与扫描件'],
+  ['exam.read', '看真题库'],
   ['user.read', '看用户'],
   ['user.write', '改用户与角色'],
   ['plan.write', '配套餐与服务项'],
   ['order.read', '看订单'],
+  ['forum.read', '看论坛'],
+  ['class.read', '看班级与自己班的学生'],
+  ['class.write', '建班 / 调班 / 设班主任'],
+  ['student.read', '看学生详情与成长曲线'],
+  ['student.write', '改学生的学业数据（带留痕）'],
+  ['forum.write', '管论坛：置顶/加精/删帖/板块'],
 ];
 
 /** 角色是"人"。admin 拿全部权限；student 只能看内容。 */
 export const ROLES: [string, string, string[]][] = [
   ['admin', '管理员', PERMS.map((p) => p[0])],
   ['student', '学生', ['content.read']],
+  /* 教师：能看内容、能看班级、能看学生 —— 但**只看自己带的班**（服务端过滤，见 classScopeOf） */
+  ['teacher', '教师', ['content.read', 'class.read', 'student.read', 'student.write']],
 ];
 
 export async function seedAuth(prisma: PrismaClient): Promise<{ roles: number; perms: number; users: number }> {

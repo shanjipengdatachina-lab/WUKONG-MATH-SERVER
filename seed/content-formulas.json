@@ -1,0 +1,196 @@
+{
+  "note": "公式速查的卡片。来源：WKMATH/formulas.html 里原来写死的那 22 条（页面 tab 上写的 42 是手抄的，不是真数）。",
+  "howto": "由 tools/ 的一次性脚本从 formulas.html 抽出来；导入走 apps/api/src/seed/formulas.ts（按 册名 + 章名 找章，在章下挂一个 group(tone=formula) 作为桶）。",
+  "groups": [
+    {
+      "book": "七年级（上）",
+      "bookLabel": "七上",
+      "chapter": "有理数",
+      "chapterNoRaw": "七上 · 第一章",
+      "cards": [
+        {
+          "name": "绝对值",
+          "formula": "|a| ≥ 0，|a| = a (a ≥ 0)；|a| = −a (a &lt; 0)",
+          "code": "01"
+        },
+        {
+          "name": "有理数加法",
+          "formula": "同号相加取同号，异号相加取绝对值较大者的符号",
+          "code": "01"
+        },
+        {
+          "name": "科学记数法",
+          "formula": "N = a × 10<sup>n</sup> (1 ≤ a &lt; 10)",
+          "code": "01"
+        }
+      ]
+    },
+    {
+      "book": "七年级（上）",
+      "bookLabel": "七上",
+      "chapter": "整式的加减",
+      "chapterNoRaw": "七上 · 第二章",
+      "cards": [
+        {
+          "name": "合并同类项",
+          "formula": "同类项的系数相加，字母与指数不变",
+          "code": ""
+        },
+        {
+          "name": "乘法分配律",
+          "formula": "a(b + c) = ab + ac",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "七年级（上）",
+      "bookLabel": "七上",
+      "chapter": "一元一次方程",
+      "chapterNoRaw": "七上 · 第三章",
+      "cards": [
+        {
+          "name": "一元一次方程求根",
+          "formula": "ax + b = 0 (a ≠ 0) ⟹ x = −b ÷ a",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "七年级（上）",
+      "bookLabel": "七上",
+      "chapter": "几何图形初步",
+      "chapterNoRaw": "七上 · 第四章",
+      "cards": [
+        {
+          "name": "余角与补角",
+          "formula": "∠A + ∠B = 90° 互余；∠A + ∠B = 180° 互补",
+          "code": ""
+        },
+        {
+          "name": "线段中点",
+          "formula": "AM = MB = AB ÷ 2",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "八年级（上）",
+      "bookLabel": "八上",
+      "chapter": "整式的乘法与因式分解",
+      "chapterNoRaw": "八上 · 第十四章",
+      "cards": [
+        {
+          "name": "同底数幂的乘法",
+          "formula": "a<sup>m</sup> · a<sup>n</sup> = a<sup>m+n</sup>",
+          "code": ""
+        },
+        {
+          "name": "平方差公式",
+          "formula": "(a + b)(a − b) = a<sup>2</sup> − b<sup>2</sup>",
+          "code": ""
+        },
+        {
+          "name": "完全平方公式",
+          "formula": "(a ± b)<sup>2</sup> = a<sup>2</sup> ± 2ab + b<sup>2</sup>",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "八年级（下）",
+      "bookLabel": "八下",
+      "chapter": "勾股定理",
+      "chapterNoRaw": "八下 · 第十七章",
+      "cards": [
+        {
+          "name": "勾股定理",
+          "formula": "a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>（c 为斜边）",
+          "code": ""
+        },
+        {
+          "name": "勾股定理的逆定理",
+          "formula": "若 a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>，则 △ABC 是直角三角形",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "九年级（上）",
+      "bookLabel": "九上",
+      "chapter": "一元二次方程",
+      "chapterNoRaw": "九上 · 第二十一章",
+      "cards": [
+        {
+          "name": "求根公式",
+          "formula": "x = (−b ± √(b<sup>2</sup> − 4ac)) ÷ 2a (a ≠ 0)",
+          "code": ""
+        },
+        {
+          "name": "根与系数的关系",
+          "formula": "x₁ + x₂ = −b ÷ a；x₁ · x₂ = c ÷ a",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "九年级（上）",
+      "bookLabel": "九上",
+      "chapter": "二次函数",
+      "chapterNoRaw": "九上 · 第二十二章",
+      "cards": [
+        {
+          "name": "顶点式",
+          "formula": "y = a(x − h)<sup>2</sup> + k，顶点 (h, k)",
+          "code": ""
+        },
+        {
+          "name": "对称轴",
+          "formula": "x = −b ÷ 2a",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "九年级（上）",
+      "bookLabel": "九上",
+      "chapter": "圆",
+      "chapterNoRaw": "九上 · 第二十四章",
+      "cards": [
+        {
+          "name": "弧长公式",
+          "formula": "l = nπr ÷ 180",
+          "code": ""
+        },
+        {
+          "name": "扇形面积",
+          "formula": "S = nπr<sup>2</sup> ÷ 360",
+          "code": ""
+        },
+        {
+          "name": "圆锥侧面积",
+          "formula": "S侧 = πrl（l 为母线长）",
+          "code": ""
+        }
+      ]
+    },
+    {
+      "book": "九年级（下）",
+      "bookLabel": "九下",
+      "chapter": "锐角三角函数",
+      "chapterNoRaw": "九下 · 第二十八章",
+      "cards": [
+        {
+          "name": "锐角三角函数定义",
+          "formula": "sinA = 对边 ÷ 斜边；cosA = 邻边 ÷ 斜边；tanA = 对边 ÷ 邻边",
+          "code": ""
+        },
+        {
+          "name": "特殊角三角函数值",
+          "formula": "sin30° = 1/2；sin45° = √2/2；sin60° = √3/2",
+          "code": ""
+        }
+      ]
+    }
+  ]
+}

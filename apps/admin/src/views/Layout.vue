@@ -24,13 +24,29 @@
           <el-icon><Money /></el-icon>
           <span>套餐与权益</span>
         </el-menu-item>
+        <el-menu-item v-if="can('class.read')" index="/classes">
+          <el-icon><School /></el-icon>
+          <span>班级</span>
+        </el-menu-item>
         <el-menu-item v-if="can('user.read')" index="/users">
           <el-icon><User /></el-icon>
           <span>用户</span>
         </el-menu-item>
+        <el-menu-item v-if="can('order.read')" index="/finance">
+          <el-icon><Coin /></el-icon>
+          <span>财务</span>
+        </el-menu-item>
         <el-menu-item v-if="can('order.read')" index="/orders">
           <el-icon><Tickets /></el-icon>
           <span>订单</span>
+        </el-menu-item>
+        <el-menu-item v-if="can('exam.read')" index="/exams">
+          <el-icon><Document /></el-icon>
+          <span>真题题库</span>
+        </el-menu-item>
+        <el-menu-item v-if="can('forum.read')" index="/forum">
+          <el-icon><ChatLineRound /></el-icon>
+          <span>论坛</span>
         </el-menu-item>
       </el-menu>
 
@@ -66,7 +82,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Odometer, Share, User, Money, Tickets } from '@element-plus/icons-vue';
+import { Odometer, Share, User, Money, Tickets, Document, ChatLineRound, Coin, School } from '@element-plus/icons-vue';
 import { api, auth, can, API_BASE } from '../api';
 
 const route = useRoute();
