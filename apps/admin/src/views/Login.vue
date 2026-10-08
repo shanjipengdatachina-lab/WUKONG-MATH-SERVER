@@ -8,7 +8,7 @@
         </div>
         <p class="login__slogan">章节、图谱、时间轴读的是同一份知识树 —— 这里改一次，三处一起变。</p>
         <ul class="login__facts">
-          <li><b>1391</b><span>知识树节点</span></li>
+          <li><b>1423</b><span>知识树节点</span></li>
           <li><b>1660</b><span>卡片</span></li>
           <li><b>3</b><span>演示学生</span></li>
         </ul>
@@ -16,7 +16,7 @@
 
       <section class="login__right">
         <h1 class="login__title">登录</h1>
-        <p class="login__sub">用管理账号登录，能看到用户与内容；学生账号只能看内容。</p>
+        <p class="login__sub">用管理员或老师账号登录：管理员管用户与内容，老师管自己带的班。学生账号请用学生端。</p>
 
         <el-form label-position="top" @submit.prevent="submit">
           <el-form-item label="账号">
@@ -34,6 +34,9 @@
             />
           </el-form-item>
           <p v-if="error" class="login__err" role="alert" data-qa="error">{{ error }}</p>
+          <p v-if="denied" class="login__err" role="alert" data-qa="denied">
+            这个账号没有后台权限 —— 学生账号请用学生端（<code>localhost:5173</code>）。
+          </p>
           <el-button
             type="primary"
             size="large"
@@ -46,7 +49,7 @@
 
         <p class="login__hint">
           演示账号：<code>admin</code> / <code>wk-admin-2026</code> ·
-          <code>student</code> / <code>wk-demo-2026</code>
+          <code>teacher</code> / <code>wk-teacher-2026</code>
         </p>
       </section>
     </div>
@@ -54,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, auth, type ApiError, type Me } from '../api';
 
@@ -63,6 +66,9 @@ const loading = ref(false);
 const error = ref('');
 const router = useRouter();
 const route = useRoute();
+
+/* 「被前台守卫挡回来」的那一次：说清是为啥，别让人反复试密码。 */
+const denied = computed(() => route.query.denied === '1');
 
 async function submit(): Promise<void> {
   if (!form.username || !form.password) { error.value = '账号和密码都要填'; return; }
