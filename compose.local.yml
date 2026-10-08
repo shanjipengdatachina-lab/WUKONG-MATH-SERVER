@@ -1,0 +1,7 @@
+services:
+  api:
+    environment:
+      NODE_ENV: development
+  web:
+    ports: !override
+      - "127.0.0.1:8080:80"

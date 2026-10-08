@@ -23,5 +23,5 @@ export default defineConfig(({ command }) => ({
      而那个路径在生产上属于学生端，后台直接白屏，报的还是个看不出原因的 404。
      开发那边不跟着改，是因为 dev server 会跑到 localhost:5174/admin/ 去，跟现在的习惯不一样。 */
   base: command === 'build' ? '/admin/' : '/',
-  build: { outDir: 'dist', sourcemap: false },
+  build: { outDir: 'dist', sourcemap: false, cssTarget: 'chrome100' },
 }));

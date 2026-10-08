@@ -18,9 +18,10 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 # admin 的清单也要拷：npm 的 workspace 是全量解析的，缺一个 manifest 会直接报错
 COPY apps/admin/package.json apps/admin/
-RUN npm ci --workspaces --include-workspace-root
+RUN npm ci --workspaces --include-workspace-root --include=dev
 
 COPY apps/api ./apps/api
+COPY seed ./seed
 
 # Prisma 生成 Client 要用**生产那份 schema**（prisma/schema.prisma，MySQL 版）：
 # prisma/dev/ 那份 SQLite 版是本地生成的，不进镜像。

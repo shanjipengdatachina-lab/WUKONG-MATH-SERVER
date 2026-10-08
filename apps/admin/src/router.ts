@@ -7,8 +7,9 @@ const routes = [
     path: '/',
     component: () => import('./views/Layout.vue'),
     children: [
-      { path: '', name: 'home', component: () => import('./views/Home.vue'), meta: { title: '概览' } },
-      { path: 'tree', name: 'tree', component: () => import('./views/Tree.vue'), meta: { title: '知识结构' } },
+      { path: '', name: 'home', component: () => import('./views/Home.vue'), meta: { title: '工作台' } },
+      { path: 'tree', name: 'tree', component: () => import('./views/Tree.vue'), meta: { title: '课程与知识内容' } },
+      { path: 'system', name: 'system', component: () => import('./views/System.vue'), meta: { title: '系统与权限', perm: 'user.read' } },
       { path: 'users', name: 'users', component: () => import('./views/Users.vue'), meta: { title: '用户', perm: 'user.read' } },
       { path: 'classes', name: 'classes', component: () => import('./views/Classes.vue'), meta: { title: '班级', perm: 'class.read' } },
       { path: 'classes/:id', name: 'class-detail', component: () => import('./views/ClassDetail.vue'), meta: { title: '班级详情', perm: 'class.read' } },
@@ -16,7 +17,7 @@ const routes = [
       { path: 'users/:id', name: 'user-detail', component: () => import('./views/UserDetail.vue'), meta: { title: '学生详情', perm: 'user.read' } },
       { path: 'orders', name: 'orders', component: () => import('./views/Orders.vue'), meta: { title: '订单', perm: 'order.read' } },
       { path: 'finance', name: 'finance', component: () => import('./views/Finance.vue'), meta: { title: '财务', perm: 'order.read' } },
-      { path: 'exams', name: 'exams', component: () => import('./views/ExamBank.vue'), meta: { title: '真题题库', perm: 'exam.read' } },
+      { path: 'exams', name: 'exams', component: () => import('./views/ExamBank.vue'), meta: { title: '真题资源库', perm: 'exam.read' } },
       { path: 'plans', name: 'plans', component: () => import('./views/Plans.vue'), meta: { title: '套餐与服务项目', perm: 'plan.write' } },
       { path: 'forum', name: 'forum', component: () => import('./views/Forum.vue'), meta: { title: '论坛', perm: 'forum.read' } },
     ],
@@ -36,7 +37,7 @@ for (const r of routes) {
   }
 }
 
-export const router = createRouter({ history: createWebHistory(), routes });
+export const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes });
 
 /* 进每个页面前先确认"你是谁"。没登录 → 去登录页，并记住原来要去哪。 */
 router.beforeEach(async (to) => {

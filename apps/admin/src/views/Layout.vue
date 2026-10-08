@@ -5,54 +5,46 @@
         <span class="lay__mark" aria-hidden="true">悟</span>
         <span class="lay__brand-text">
           <b>悟空数学</b>
-          <i>管理后台</i>
+          <i>初中试点 · 管理后台</i>
         </span>
+        <el-button class="lay__nav-toggle" :icon="Menu" aria-label="切换导航" :aria-expanded="mobileMenuOpen" @click="mobileMenuOpen = !mobileMenuOpen" />
       </div>
 
-      <el-menu :default-active="active" router class="lay__menu">
+      <el-menu :default-active="active" :default-openeds="openGroups" router class="lay__menu" :class="{ 'lay__menu--open': mobileMenuOpen }" @select="mobileMenuOpen = false">
         <el-menu-item index="/">
           <el-icon><Odometer /></el-icon>
-          <span>概览</span>
+          <span>工作台</span>
         </el-menu-item>
-        <el-menu-item index="/tree">
-          <el-icon><Share /></el-icon>
-          <span>知识结构</span>
-        </el-menu-item>
-        <!-- 菜单按权限显隐。注意：**这只是显隐**，真正的放行在服务端（requirePerm）——
-             前端藏一个入口不算权限，直接敲地址照样要被 403 挡住。 -->
-        <el-menu-item v-if="can('plan.write')" index="/plans">
-          <el-icon><Money /></el-icon>
-          <span>套餐与权益</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('class.read')" index="/classes">
-          <el-icon><School /></el-icon>
-          <span>班级</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('user.read')" index="/users">
-          <el-icon><User /></el-icon>
-          <span>用户</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('order.read')" index="/finance">
-          <el-icon><Coin /></el-icon>
-          <span>财务</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('order.read')" index="/orders">
-          <el-icon><Tickets /></el-icon>
-          <span>订单</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('exam.read')" index="/exams">
-          <el-icon><Document /></el-icon>
-          <span>真题题库</span>
-        </el-menu-item>
-        <el-menu-item v-if="can('forum.read')" index="/forum">
-          <el-icon><ChatLineRound /></el-icon>
-          <span>论坛</span>
-        </el-menu-item>
+
+        <!-- 菜单按权限显隐。注意：**这只是显隐**，真正的放行仍在服务端（requirePerm）。 -->
+        <el-sub-menu index="content">
+          <template #title><el-icon><Share /></el-icon><span>教学内容</span></template>
+          <el-menu-item index="/tree">课程与知识结构</el-menu-item>
+          <el-menu-item v-if="can('exam.read')" index="/exams">真题资源库</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu v-if="can('class.read') || can('user.read')" index="learners">
+          <template #title><el-icon><School /></el-icon><span>学员与班级</span></template>
+          <el-menu-item v-if="can('class.read')" index="/classes">班级与花名册</el-menu-item>
+          <el-menu-item v-if="can('user.read')" index="/users">学生与账号</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu v-if="can('forum.read') || can('plan.write') || can('order.read')" index="operations">
+          <template #title><el-icon><Coin /></el-icon><span>运营中心</span></template>
+          <el-menu-item v-if="can('forum.read')" index="/forum">社区内容</el-menu-item>
+          <el-menu-item v-if="can('plan.write')" index="/plans">套餐与权益</el-menu-item>
+          <el-menu-item v-if="can('order.read')" index="/orders">订单</el-menu-item>
+          <el-menu-item v-if="can('order.read')" index="/finance">财务分析</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu v-if="can('user.read')" index="system">
+          <template #title><el-icon><Setting /></el-icon><span>系统与权限</span></template>
+          <el-menu-item index="/system">角色与权限概况</el-menu-item>
+        </el-sub-menu>
       </el-menu>
 
       <div class="lay__foot">
-        <p class="lay__foot-line">带后台版 v1.7</p>
-        <p class="lay__foot-line">接口 {{ apiBase }}</p>
+        <p class="lay__foot-line">初中试点版</p>
+        <el-tag v-if="isDemo" size="small" type="warning" effect="plain">演示账号</el-tag>
       </div>
     </el-aside>
 
@@ -80,13 +72,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Odometer, Share, User, Money, Tickets, Document, ChatLineRound, Coin, School } from '@element-plus/icons-vue';
-import { api, auth, can, API_BASE } from '../api';
+import { Odometer, Share, Coin, School, Setting, Menu } from '@element-plus/icons-vue';
+import { api, auth, can } from '../api';
 
 const route = useRoute();
 const router = useRouter();
+const mobileMenuOpen = ref(false);
 /* 菜单高亮看**第一段**：在 /users/144 这类子页面上，「用户」那一条也该亮着 ——
    直接拿 route.path 去比的话，一进详情页左侧就没有任何一项是选中的。 */
 const active = computed(() => {
@@ -94,7 +87,8 @@ const active = computed(() => {
   return seg ? `/${seg}` : '/';
 });
 const title = computed(() => (route.meta.title as string) || '');
-const apiBase = API_BASE;
+const openGroups = ['content', 'learners', 'operations', 'system'];
+const isDemo = computed(() => ['admin', 'teacher', 'student', 'zhouyutong', 'chenzihang'].includes(auth.user?.username || ''));
 
 async function logout(): Promise<void> {
   try { await api('/auth/logout', { method: 'POST' }); } catch { /* 登出失败也照样回登录页 */ }
@@ -105,6 +99,7 @@ async function logout(): Promise<void> {
 
 <style scoped>
 .lay { min-height: 100vh; }
+.lay__nav-toggle { display: none; margin-left: auto; }
 
 /* ---- 左侧 ---- */
 .lay__aside {
@@ -187,4 +182,16 @@ async function logout(): Promise<void> {
 .lay__who-text i { font-size: 12px; font-style: normal; color: var(--admin-ink-3); }
 
 .lay__main { padding: 20px 24px 32px; }
+@media (max-width: 700px) {
+  .lay { flex-direction: column; }
+  .lay__aside { width: 100% !important; border-right: none; border-bottom: 1px solid var(--admin-line); }
+  .lay__brand { height: 54px; }
+  .lay__menu { padding: 4px 8px; }
+  .lay__menu:not(.lay__menu--open) { display: none; }
+  .lay__nav-toggle { display: inline-flex; }
+  .lay__foot { display: none; }
+  .lay__right { min-width: 0; }
+  .lay__head { padding: 12px; height: auto; gap: 8px; flex-wrap: wrap; }
+  .lay__main { padding: 16px 12px; }
+}
 </style>

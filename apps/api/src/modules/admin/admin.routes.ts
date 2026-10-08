@@ -30,6 +30,22 @@ const Stats = z.object({
   roles: z.number(),
 });
 
+/* 内容治理的第一张账：不是把"节点数"当成内容完成度，而是明确看每个学段里
+   有多少可学习节点、其中多少已有正文、多少已经挂到真题。练习题旧表还没有节点关系，
+   所以这里**只统计已经真实绑定节点的真题**，不拿模糊的 tag 充数。 */
+const ContentCoverage = z.object({
+  stages: z.array(z.object({
+    stage: z.string(),
+    name: z.string(),
+    learningNodes: z.number(),
+    contentNodes: z.number(),
+    missingContentNodes: z.number(),
+    examQuestionNodes: z.number(),
+    examQuestions: z.number(),
+    missingQuestionNodes: z.number(),
+  })),
+});
+
 const UserRow = z.object({
   id: z.number(), username: z.string(), nickname: z.string(),
   grade: z.string().nullable(), role: z.string(), createdAt: z.string(),
@@ -90,6 +106,10 @@ function toRow(u: {
 registry.registerPath({
   method: 'get', path: '/api/admin/stats', summary: '后台概览（需 content.read）',
   responses: { 200: { description: '统计', content: { 'application/json': { schema: Stats } } }, 403: { description: '没权限' } },
+});
+registry.registerPath({
+  method: 'get', path: '/api/admin/content-coverage', summary: '按学段查看正文与真题覆盖（需 content.read）',
+  responses: { 200: { description: '内容覆盖', content: { 'application/json': { schema: ContentCoverage } } }, 403: { description: '没权限' } },
 });
 registry.registerPath({
   method: 'get', path: '/api/admin/users', summary: '用户列表（搜索/筛选/分页，需 user.read）',
@@ -202,6 +222,79 @@ adminRouter.get('/admin/stats', requireAuth, requirePerm('content.read'), async 
   ]);
 
   res.json({ nodes, nodeTotal, cards, contents, users, sessionsAlive, roles });
+});
+
+/**
+ * 内容覆盖只把 section / point 当作「可学习节点」。章和教材册是容器，拿它们算覆盖率会
+ * 把“一个章里只写了一节”误报成“这一章已完成”。stage 只挂在 book / track 上，故在内存
+ * 里沿父链回溯；节点量约千级，避免为一个工作台卡片再维护一份容易失真的冗余字段。
+ */
+adminRouter.get('/admin/content-coverage', requireAuth, requirePerm('content.read'), async (_req, res) => {
+  const [nodes, contents, examQuestions] = await Promise.all([
+    prisma.node.findMany({ select: { id: true, parentId: true, kind: true, stage: true } }),
+    prisma.content.findMany({ select: { nodeId: true } }),
+    prisma.examQuestion.findMany({ select: { nodeId: true } }),
+  ]);
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const stageCache = new Map<number, string | null>();
+  function stageOf(id: number): string | null {
+    const cached = stageCache.get(id);
+    if (cached !== undefined) { return cached; }
+    const seen = new Set<number>();
+    let cur = byId.get(id);
+    while (cur && !seen.has(cur.id)) {
+      if (cur.stage) { stageCache.set(id, cur.stage); return cur.stage; }
+      seen.add(cur.id);
+      cur = cur.parentId === null ? undefined : byId.get(cur.parentId);
+    }
+    stageCache.set(id, null);
+    return null;
+  }
+
+  const knownStages = [
+    ['primary', '小学'], ['junior', '初中'], ['senior', '高中'], ['olympiad', '竞赛'],
+  ] as const;
+  type CoverageBucket = {
+    stage: string; name: string; learning: Set<number>; content: Set<number>;
+    examNodes: Set<number>; examQuestions: number;
+  };
+  const buckets = new Map<string, CoverageBucket>(knownStages.map(([stage, name]) => [stage, {
+    stage, name, learning: new Set<number>(), content: new Set<number>(), examNodes: new Set<number>(), examQuestions: 0,
+  }]));
+
+  nodes.filter((n) => n.kind === 'section' || n.kind === 'point').forEach((n) => {
+    const stage = stageOf(n.id);
+    if (stage && buckets.has(stage)) { buckets.get(stage)!.learning.add(n.id); }
+  });
+  contents.forEach((c) => {
+    const stage = stageOf(c.nodeId);
+    if (stage && buckets.has(stage)) { buckets.get(stage)!.content.add(c.nodeId); }
+  });
+  examQuestions.forEach((q) => {
+    if (q.nodeId === null) { return; }
+    const stage = stageOf(q.nodeId);
+    if (stage && buckets.has(stage)) {
+      const bucket = buckets.get(stage)!;
+      bucket.examQuestions += 1;
+      bucket.examNodes.add(q.nodeId);
+    }
+  });
+
+  res.json({
+    stages: knownStages.map(([stage, name]) => {
+      const bucket = buckets.get(stage)!;
+      const learningNodes = bucket.learning.size;
+      const contentNodes = [...bucket.content].filter((id) => bucket.learning.has(id)).length;
+      const examQuestionNodes = [...bucket.examNodes].filter((id) => bucket.learning.has(id)).length;
+      return {
+        stage, name, learningNodes, contentNodes,
+        missingContentNodes: Math.max(0, learningNodes - contentNodes),
+        examQuestionNodes, examQuestions: bucket.examQuestions,
+        missingQuestionNodes: Math.max(0, learningNodes - examQuestionNodes),
+      };
+    }),
+  });
 });
 
 adminRouter.get('/admin/users', requireAuth, requirePerm('user.read'), async (req, res) => {

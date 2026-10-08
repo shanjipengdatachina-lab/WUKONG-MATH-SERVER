@@ -79,7 +79,7 @@ services:
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # 学生端：**直接挂那份静态文件**，不构建 —— 用户口径里点名要保住这条
-      - ../WKMATH:/srv/web:ro
+      - ../WUKONG-MATH-SYSTEM-main:/srv/web:ro
       # 后台：在宿主机上 `npm run build -w @wukong-math/admin` 出来的产物
       - ./apps/admin/dist:/srv/admin:ro
       # 证书与 certbot 的校验目录

@@ -2,6 +2,7 @@
 node_modules/
 dist/
 *.tsbuildinfo
+local-checks/
 
 # 环境变量：真值只在本机，仓库里只留 .env.example
 .env

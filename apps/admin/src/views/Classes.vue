@@ -173,7 +173,7 @@ const router = useRouter();
 
 const stages = ref<StageRow[]>([]);
 const rows = ref<ClassRow[]>([]);
-const tab = ref('primary');
+const tab = ref('junior');
 const teachers = ref<{ id: number; username: string; nickname: string }[]>([]);
 const candidates = ref<Candidate[]>([]);
 
@@ -193,9 +193,7 @@ function byStage(s: string): ClassRow[] {
 async function loadStages(): Promise<void> {
   const d = await api<{ items: StageRow[] }>('/admin/stages');
   stages.value = d.items;
-  /* 默认落在第一个"有班的"学段；一个班都没有就留在小学那一栏（建班引导在那儿） */
-  const first = d.items.find((s) => s.classes > 0);
-  if (first) { tab.value = first.stage; }
+  if (!d.items.some((s) => s.stage === tab.value)) { tab.value = d.items[0]?.stage ?? 'junior'; }
 }
 
 async function loadClasses(): Promise<void> {
